@@ -11,7 +11,6 @@ import { Media } from "@/types";
 export default function Page() {
   const { media, deleteMedia } = useMediaStore();
   
-  // These must be two separate pieces of state
   const [viewingItem, setViewingItem] = useState<Media | null>(null);
   const [editingItem, setEditingItem] = useState<Media | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -34,10 +33,7 @@ export default function Page() {
             <MediaCard 
               key={item.id} 
               item={item} 
-              // onView strictly sets the viewing state
               onView={(it: Media) => setViewingItem(it)} 
-              // onEdit strictly sets the editing state
-              onEdit={(it: Media) => setEditingItem(it)}
               onDelete={(it: Media) => { if(confirm(`Remove ${it.title}?`)) deleteMedia(it.id); }}
             />
           ))}
@@ -46,7 +42,7 @@ export default function Page() {
 
       <AddSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* MODAL 1: The Info Page */}
+      {/* Logic for transitioning between modals */}
       {viewingItem && (
         <MediaModal 
           item={viewingItem} 
@@ -59,7 +55,6 @@ export default function Page() {
         />
       )}
 
-      {/* MODAL 2: The Progress Tracker */}
       {editingItem && (
         <EditMediaModal 
           item={editingItem} 
