@@ -1,21 +1,20 @@
-export type MediaType = 'anime' | 'manga' | 'movie' | 'tv';
+export type MediaType = 'anime' | 'manga' | 'movie' | 'tv' | 'book';
 
-// Using a clean, unified naming convention for status
 export type MediaStatus = 'watching' | 'reading' | 'completed' | 'plan_to_watch' | 'dropped';
 
 export interface Media {
   id: string;
   title: string;
-  creator?: string;      // Author for manga / Studio for anime
+  creator?: string;      // Author for books/manga
   status: MediaStatus;
   rating: number;
   type: MediaType;
-  poster: string;        // Made required for visual consistency
+  poster: string;
   year?: number;
   synopsis?: string;
   genres?: string[];
-  progress: number;      // Current Episode or Chapter
-  episodes?: number;     // Total Episodes or Chapters
-  runtime?: string;      // Specifically for 'movie' type
+  progress: number;      // Current Page / Chapter
+  episodes?: number;     // Total Pages / Chapters
+  runtime?: string;
   mediaTypeBadge?: string;
 }

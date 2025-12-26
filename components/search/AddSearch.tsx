@@ -39,12 +39,17 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
       title: item.title,
       type: activeTab,
       creator: item.creators?.[0] || 'Unknown', 
-      status: (activeTab === 'manga' ? 'toread' : 'towatch') as MediaStatus,
-      rating: item.rating, // Saves the float (e.g. 8.7)
+      // Using 'plan_to_watch' to match our merged MediaStatus type
+      status: 'plan_to_watch' as MediaStatus,
+      rating: item.rating, 
       progress: 0,
+      poster: item.poster || '', // Ensuring poster is not undefined
     });
     onClose();
   };
+
+  // Define tabs including the new 'book' type
+  const tabs: MediaType[] = ['movie', 'tv', 'anime', 'manga', 'book'];
 
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
@@ -58,9 +63,9 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
           </button>
         </div>
 
-        {/* Tab Selection */}
+        {/* Tab Selection - Now includes Books */}
         <div className="px-8 pt-6 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
-          {(['movie', 'tv', 'anime', 'manga'] as MediaType[]).map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setResults([]); }}
@@ -79,7 +84,7 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
             <input 
               type="text" 
               placeholder={`Search ${activeTab}...`} 
-              className="w-full pl-14 pr-6 py-5 bg-neutral-900 border-none rounded-3xl outline-none text-sm font-bold text-white"
+              className="w-full pl-14 pr-6 py-5 bg-neutral-900 border-none rounded-3xl outline-none text-sm font-bold text-white placeholder:text-neutral-700"
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
@@ -99,7 +104,11 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
                 onClick={() => handleAddItem(item)}
               >
                 <div className="w-16 h-24 bg-neutral-900 rounded-xl overflow-hidden shrink-0 border border-neutral-800">
-                  {item.poster ? <img src={item.poster} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" /> : <div className="flex items-center justify-center h-full"><ImageOff size={20} className="text-neutral-800" /></div>}
+                  {item.poster ? (
+                    <img src={item.poster} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" alt="" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full"><ImageOff size={20} className="text-neutral-800" /></div>
+                  )}
                 </div>
 
                 <div className="flex flex-col justify-center flex-1">
@@ -113,7 +122,7 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
                     <span className="text-[10px] text-neutral-600 font-bold uppercase">{item.year || 'N/A'}</span>
                     <div className="flex items-center gap-1 ml-auto">
                       <Star size={10} className="fill-yellow-600 text-yellow-600" />
-                      <span className="text-[10px] font-black text-neutral-400">{item.rating.toFixed(1)}</span>
+                      <span className="text-[10px] font-black text-neutral-400">{item.rating?.toFixed(1) || '0.0'}</span>
                     </div>
                   </div>
                   
@@ -123,7 +132,9 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900 text-neutral-500 group-hover:bg-white group-hover:text-black self-center transition-all"><Plus size={18} /></div>
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900 text-neutral-500 group-hover:bg-white group-hover:text-black self-center transition-all">
+                  <Plus size={18} />
+                </div>
               </div>
             ))
           )}

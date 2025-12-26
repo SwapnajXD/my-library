@@ -11,27 +11,41 @@ interface MediaModalProps {
 }
 
 export default function MediaModal({ item, onClose, onEdit }: MediaModalProps) {
+  // Fixes "Cannot find name 'setShowSources'"
   const [showSources, setShowSources] = useState(false);
+
+  // Logic to determine the third source based on media type
+  const getSpecificSource = () => {
+    if (item.type === 'manga') {
+      return { name: 'MangaDex', url: `https://mangadex.org/search?q=${encodeURIComponent(item.title)}` };
+    }
+    if (item.type === 'book') {
+      return { name: 'Google Books', url: `https://www.google.com/search?tbm=bks&q=${encodeURIComponent(item.title)}` };
+    }
+    return { name: 'AnimeKai', url: `https://animekai.to/browser?keyword=${encodeURIComponent(item.title)}` };
+  };
+
+  const specificSource = getSpecificSource();
 
   const sources = [
     { 
       name: 'Google Search', 
       icon: <Search size={18} />, 
-      url: `https://www.google.com/search?q=watch+${encodeURIComponent(item.title)}` 
+      url: `https://www.google.com/search?q=${encodeURIComponent(item.title)}` 
     },
     { 
       name: 'YouTube', 
       icon: <Youtube size={18} />, 
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}+trailer` 
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}+${item.type === 'book' ? 'review' : 'trailer'}` 
     },
     { 
-      name: item.type === 'manga' ? 'MangaDex' : 'AnimeKai', 
+      name: specificSource.name, 
       icon: <Globe size={18} />, 
-      url: item.type === 'manga' 
-        ? `https://mangadex.org/search?q=${encodeURIComponent(item.title)}` 
-        : `https://animekai.to/browser?keyword=${encodeURIComponent(item.title)}` 
+      url: specificSource.url 
     },
   ];
+
+  const isReadingMaterial = item.type === 'manga' || item.type === 'book';
 
   return (
     <div className="fixed inset-0 z-150 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
@@ -57,7 +71,7 @@ export default function MediaModal({ item, onClose, onEdit }: MediaModalProps) {
               <div className="flex flex-wrap gap-2 mb-6">
                 <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800">
                   <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                  <span className="text-sm font-black text-white">{item.rating?.toFixed(1)}</span>
+                  <span className="text-sm font-black text-white">{item.rating?.toFixed(1) || '0.0'}</span>
                 </div>
                 {item.genres?.map((genre) => (
                   <span key={genre} className="bg-neutral-900/50 border border-neutral-800 text-neutral-500 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-[0.15em]">{genre}</span>
@@ -68,7 +82,7 @@ export default function MediaModal({ item, onClose, onEdit }: MediaModalProps) {
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-700 mb-3 flex items-center gap-2">
                   <Tag size={10} /> Synopsis
                 </h3>
-                <p className="text-sm text-neutral-400 leading-relaxed font-medium line-clamp-6 md:line-clamp-none">
+                <p className="text-sm text-neutral-400 leading-relaxed font-medium">
                   {item.synopsis || "No description available."}
                 </p>
               </div>
@@ -81,7 +95,8 @@ export default function MediaModal({ item, onClose, onEdit }: MediaModalProps) {
                   onClick={() => setShowSources(true)}
                   className="flex-1 py-4 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-neutral-200 transition-all"
                 >
-                  {item.type === 'manga' ? <BookOpen size={16}/> : <Play size={16}/>} Continue
+                  {isReadingMaterial ? <BookOpen size={16}/> : <Play size={16}/>} 
+                  Continue {isReadingMaterial ? 'Reading' : 'Watching'}
                 </button>
               </div>
             </>
