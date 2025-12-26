@@ -1,38 +1,25 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import './globals.css';
+import { ThemeProvider } from '@/context/ThemeContext';
+import { Inter } from 'next/font/google';
 
-import { ThemeProvider } from "@/context/ThemeContext";
-import { LibraryProvider } from "@/context/LibraryContext";
+const inter = Inter({ subsets: ['latin'] });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "MediaManager",
-  description: "Organize your Manga, Anime, Movies, and TV Series",
+export const metadata = {
+  title: 'MediaManager',
+  description: 'Manage your personal library',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* Wrap children in both providers */}
+      <body className={inter.className}>
+        {/* Everything inside here can now use useTheme() */}
         <ThemeProvider>
-          <LibraryProvider>
-            {children}
-          </LibraryProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>
