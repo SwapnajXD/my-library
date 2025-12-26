@@ -11,6 +11,7 @@ import { Media } from "@/types";
 export default function Page() {
   const { media, deleteMedia } = useMediaStore();
   
+  // Modal states
   const [viewingItem, setViewingItem] = useState<Media | null>(null);
   const [editingItem, setEditingItem] = useState<Media | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -28,26 +29,30 @@ export default function Page() {
           </button>
         </header>
 
+        {/* Media Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
           {media.map((item: Media) => (
             <MediaCard 
               key={item.id} 
               item={item} 
               onView={(it: Media) => setViewingItem(it)} 
-              onDelete={(it: Media) => { if(confirm(`Remove ${it.title}?`)) deleteMedia(it.id); }}
+              // Instant deletion logic
+              onDelete={(it: Media) => deleteMedia(it.id)}
             />
           ))}
         </div>
       </div>
 
+      {/* Global Search/Add Modal */}
       <AddSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* Logic for transitioning between modals */}
+      {/* Info Tab Modal */}
       {viewingItem && (
         <MediaModal 
           item={viewingItem} 
           onClose={() => setViewingItem(null)} 
           onEdit={() => { 
+            // Transition from Info Tab to Progress Editor
             const itemToEdit = viewingItem;
             setViewingItem(null); 
             setEditingItem(itemToEdit); 
@@ -55,6 +60,7 @@ export default function Page() {
         />
       )}
 
+      {/* Progress Editor Modal */}
       {editingItem && (
         <EditMediaModal 
           item={editingItem} 
