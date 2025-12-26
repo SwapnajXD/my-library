@@ -33,7 +33,7 @@ export default function AddSearch({ isOpen, onClose, onImport, onManualAdd }: Ad
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl w-full max-w-2xl h-[85vh] flex flex-col shadow-2xl border border-white/20 animate-in zoom-in-95 duration-200">
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
           <div><h2 className="text-2xl font-bold text-slate-800">Add to Collection</h2><p className="text-sm text-slate-500">Search APIs or add manually</p></div>
@@ -51,7 +51,7 @@ export default function AddSearch({ isOpen, onClose, onImport, onManualAdd }: Ad
           {!loading && uniqueResults.length === 0 && <div className="flex flex-col items-center justify-center h-full text-slate-400 text-center"><div className="bg-slate-100 p-4 rounded-full mb-4"><svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p className="text-lg font-medium text-slate-600">Start a search above</p><p className="text-sm mt-1">Or add manually below.</p></div>}
           {uniqueResults.map((item) => (
             <div key={item.id} className="flex gap-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-indigo-300 cursor-pointer transition-all duration-200 group" onClick={() => onImport(item)}>
-              <div className="relative w-20 h-28 flex-shrink-0"><div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 rounded-xl blur-sm"></div><img src={item.cover} alt={item.title} className="relative w-full h-full object-cover rounded-xl shadow-md" /></div>
+              <div className="relative w-20 h-28 shrink-0"><div className="absolute inset-0 bg-linear-to-tr from-indigo-500/20 to-purple-500/20 rounded-xl blur-sm"></div><img src={item.cover} alt={item.title} className="relative w-full h-full object-cover rounded-xl shadow-md" /></div>
               <div className="flex-1 flex flex-col justify-center">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide border border-slate-200">{item.source}</span>
