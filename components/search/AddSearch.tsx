@@ -3,13 +3,10 @@
 import { useState, useMemo } from 'react';
 import { searchMedia, UnifiedMediaItem } from '@/services/unifiedApi';
 import { useMediaStore } from '@/store/mediaStore';
-import { Search, X, Loader2, Plus, ImageOff } from 'lucide-react';
-import { MediaType } from '@/types';
+import { Search, X, Loader2, Plus, ImageOff, Star } from 'lucide-react';
+import { MediaType, MediaStatus } from '@/types';
 
-interface AddSearchProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+interface AddSearchProps { isOpen: boolean; onClose: () => void; }
 
 export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
   const [query, setQuery] = useState('');
@@ -33,31 +30,42 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
     try {
       const apiResults = await searchMedia(query, activeTab);
       setResults(apiResults || []);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
+  };
+
+  const handleAddItem = (item: UnifiedMediaItem) => {
+    addMedia({
+      ...item,
+      title: item.title,
+      type: activeTab,
+      creator: item.creators?.[0] || 'Unknown', 
+      status: (activeTab === 'manga' ? 'toread' : 'towatch') as MediaStatus,
+      rating: item.rating, // Saves the float (e.g. 8.7)
+      progress: 0,
+    });
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
-      <div className="bg-white dark:bg-neutral-950 w-full max-w-2xl h-[80vh] flex flex-col rounded-[32px] border border-neutral-200 dark:border-neutral-900 overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
+      <div className="bg-black w-full max-w-2xl h-[80vh] flex flex-col rounded-[40px] border border-neutral-900 overflow-hidden shadow-2xl">
         
-        {/* Modal Header */}
-        <div className="px-8 py-6 flex justify-between items-center">
-          <h2 className="text-xl font-black tracking-tighter uppercase">Search Library</h2>
-          <button onClick={onClose} className="p-2 bg-neutral-100 dark:bg-neutral-900 rounded-full text-neutral-500">
+        {/* Header */}
+        <div className="px-8 py-6 flex justify-between items-center border-b border-neutral-900">
+          <h2 className="text-[10px] font-black tracking-[0.3em] uppercase text-white">Discovery</h2>
+          <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Tab Selection */}
-        <div className="px-8 pb-4 flex gap-3">
+        <div className="px-8 pt-6 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
           {(['movie', 'tv', 'anime', 'manga'] as MediaType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setResults([]); }}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                activeTab === tab ? 'bg-black dark:bg-white text-white dark:text-black' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'
+              className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
+                activeTab === tab ? 'bg-white text-black' : 'bg-neutral-900 text-neutral-500 hover:text-neutral-300'
               }`}
             >
               {tab}
@@ -65,42 +73,57 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
           ))}
         </div>
 
-        {/* Input Field */}
+        {/* Search Input */}
         <div className="px-8 py-4">
           <form onSubmit={handleSearch} className="relative">
             <input 
               type="text" 
-              placeholder={`Find ${activeTab}...`} 
-              className="w-full pl-12 pr-6 py-4 bg-neutral-100 dark:bg-neutral-900 border-none rounded-2xl outline-none text-sm font-medium focus:ring-1 ring-neutral-400"
+              placeholder={`Search ${activeTab}...`} 
+              className="w-full pl-14 pr-6 py-5 bg-neutral-900 border-none rounded-3xl outline-none text-sm font-bold text-white"
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
-            <Search className="w-5 h-5 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className="w-5 h-5 text-neutral-700 absolute left-5 top-1/2 -translate-y-1/2" />
           </form>
         </div>
 
-        {/* Results List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+        {/* Results */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
           {loading ? (
-            <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-neutral-400" /></div>
+            <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-neutral-800" /></div>
           ) : (
-            uniqueResults.map((item) => (
+            uniqueResults.map((item: UnifiedMediaItem) => (
               <div 
                 key={item.id} 
-                className="flex gap-4 p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-neutral-200 dark:hover:border-neutral-800"
-                onClick={() => {
-                  addMedia({...item, rating: 0, status: 'towatch', creator: item.creators?.[0] || 'N/A'});
-                  onClose();
-                }}
+                className="flex gap-4 p-4 hover:bg-neutral-900/40 rounded-[28px] cursor-pointer group border border-transparent hover:border-neutral-900 transition-all"
+                onClick={() => handleAddItem(item)}
               >
-                <div className="w-14 h-20 bg-neutral-200 dark:bg-neutral-800 rounded-lg overflow-hidden shrink-0">
-                  {item.poster ? <img src={item.poster} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full"><ImageOff size={16}/></div>}
+                <div className="w-16 h-24 bg-neutral-900 rounded-xl overflow-hidden shrink-0 border border-neutral-800">
+                  {item.poster ? <img src={item.poster} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" /> : <div className="flex items-center justify-center h-full"><ImageOff size={20} className="text-neutral-800" /></div>}
                 </div>
-                <div className="flex flex-col justify-center">
-                  <h4 className="font-bold text-sm">{item.title}</h4>
-                  <p className="text-xs text-neutral-500 mt-1">{item.year || 'Unknown Year'}</p>
+
+                <div className="flex flex-col justify-center flex-1">
+                  <h4 className="font-bold text-sm text-neutral-200 group-hover:text-white line-clamp-1">{item.title}</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    {item.mediaTypeBadge && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-md bg-neutral-900 text-neutral-500 font-black uppercase">
+                        {item.mediaTypeBadge}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-neutral-600 font-bold uppercase">{item.year || 'N/A'}</span>
+                    <div className="flex items-center gap-1 ml-auto">
+                      <Star size={10} className="fill-yellow-600 text-yellow-600" />
+                      <span className="text-[10px] font-black text-neutral-400">{item.rating.toFixed(1)}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-1 mt-2">
+                    {item.genres?.slice(0, 2).map((g: string) => (
+                      <span key={g} className="text-[8px] font-black text-neutral-700 uppercase border border-neutral-900 px-1.5 py-0.5 rounded-md">{g}</span>
+                    ))}
+                  </div>
                 </div>
-                <Plus size={18} className="ml-auto self-center text-neutral-300" />
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900 text-neutral-500 group-hover:bg-white group-hover:text-black self-center transition-all"><Plus size={18} /></div>
               </div>
             ))
           )}

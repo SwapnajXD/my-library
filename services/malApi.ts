@@ -1,18 +1,3 @@
-export interface MalRawResult {
-  mal_id: number;
-  title: string;
-  images: {
-    jpg: {
-      image_url: string;
-    };
-  };
-  synopsis: string;
-  score: number;
-  authors: {
-    name: string;
-  }[];
-}
-
 export interface MediaItem {
   id: string;
   title: string;
@@ -20,23 +5,39 @@ export interface MediaItem {
   cover: string;
   rating: number;
   source: 'MAL';
-  year?: number | string;   // Add this
-  synopsis?: string;        // Add this
+  year?: number;
+  synopsis?: string;
+  episodes?: number;
+  genres?: string[];
+  type?: string; 
 }
 
-export const searchManga = async (query: string): Promise<MediaItem[]> => {
+export const searchMal = async (query: string, category: 'anime' | 'manga'): Promise<MediaItem[]> => {
   if (!query.trim()) return [];
+  const endpoint = category === 'anime' ? 'anime' : 'manga';
+  
   try {
-    const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=5`);
+    const res = await fetch(
+      `https://api.jikan.moe/v4/${endpoint}?q=${encodeURIComponent(query)}&limit=25`
+    );
+    if (!res.ok) throw new Error(`MAL Error: ${res.status}`);
     const data = await res.json();
-    if (!data.data) return [];
-    return data.data.map((manga: MalRawResult) => ({
-      id: `MAL-${manga.mal_id}`,
+    if (!data?.data) return [];
+
+    return data.data.map((item: any) => ({
+      id: `MAL-${item.mal_id}`,
       source: 'MAL' as const,
-      title: manga.title,
-      authors: manga.authors.map(a => a.name),
-      cover: manga.images.jpg.image_url,
-      rating: Math.round(manga.score / 2)
+      title: item.title,
+      authors: category === 'anime' 
+        ? item.studios?.map((s: any) => s.name) || []
+        : item.authors?.map((a: any) => a.name) || [],
+      cover: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
+      rating: item.score ? Number(Math.min(item.score, 10).toFixed(1)) : 0,
+      year: item.year || item.aired?.prop?.from?.year || item.published?.prop?.from?.year,
+      synopsis: item.synopsis,
+      episodes: item.chapters || item.episodes || 0,
+      genres: item.genres?.map((g: any) => g.name) || [],
+      type: item.type 
     }));
   } catch (error) {
     console.error("MAL API Error:", error);

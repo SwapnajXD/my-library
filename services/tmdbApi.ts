@@ -1,43 +1,46 @@
+const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const BASE_URL = 'https://api.themoviedb.org/3';
+
 export interface TmdbItem {
-  id: number;
-  title?: string;
-  name?: string; 
-  poster_path: string;
-  vote_average: number;
-  overview: string;
-  release_date?: string;
-  first_air_date?: string;
+  id: string;
+  title: string;
+  creator: string;
+  poster: string;
+  rating: number;
+  year?: number;
+  synopsis?: string;
+  genres?: string[];
+  episodes?: number;
+  type?: string;
 }
 
-const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY; 
-
-export const normalizeTmdb = (item: TmdbItem, type: 'movie' | 'tv') => {
-  const rawDate = item.release_date || item.first_air_date;
-  return {
-    id: `TMDB-${type}-${item.id}`,
-    source: 'TMDB' as const,
-    type: type,
-    title: item.title || item.name || 'Unknown Title',
-    creators: ['Unknown'], 
-    poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '',
-    rating: Math.round(item.vote_average / 2),
-    year: rawDate ? new Date(rawDate).getFullYear() : undefined,
-    synopsis: item.overview
-  };
-};
-
-export const searchTmdb = async (query: string, type: 'movie' | 'tv') => {
-  if (!query.trim() || !TMDB_API_KEY) return [];
+export const searchTmdb = async (query: string, category: 'movie' | 'tv'): Promise<TmdbItem[]> => {
+  if (!query.trim()) return [];
 
   try {
     const res = await fetch(
-      `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`
+      `${BASE_URL}/search/${category}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=en-US`
     );
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error(`TMDB Error: ${res.status}`);
     const data = await res.json();
-    return (data.results || []).map((item: TmdbItem) => normalizeTmdb(item, type));
+    if (!data.results) return [];
+
+    return data.results.map((item: any) => ({
+      id: `TMDB-${item.id}`,
+      title: item.title || item.name,
+      creator: category === 'movie' ? 'Movie' : 'TV Series', 
+      poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '',
+      // Float Rating (e.g. 7.4)
+      rating: item.vote_average ? Number(Math.min(item.vote_average, 10).toFixed(1)) : 0,
+      year: item.release_date ? new Date(item.release_date).getFullYear() : 
+            item.first_air_date ? new Date(item.first_air_date).getFullYear() : undefined,
+      synopsis: item.overview,
+      genres: [], 
+      episodes: 0,
+      type: category === 'movie' ? 'Movie' : 'TV'
+    }));
   } catch (error) {
-    console.error("TMDB API Error:", error);
+    console.error("TMDB Search Error:", error);
     return [];
   }
 };

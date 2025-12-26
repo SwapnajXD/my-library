@@ -1,15 +1,19 @@
-// types/index.ts
+export type MediaType = 'movie' | 'tv' | 'anime' | 'manga';
 export type MediaStatus = 'reading' | 'watching' | 'completed' | 'toread' | 'towatch';
-export type MediaType = 'manga' | 'anime' | 'movie' | 'tv';
 
 export interface Media {
   id: string;
-  type: MediaType;
   title: string;
-  creator: string;     
-  poster: string;      
-  rating: number;
+  creator: string;
   status: MediaStatus;
-  year?: number | string;
+  rating: number;
+  type: MediaType;
+  poster?: string;
+  year?: number;
   synopsis?: string;
+  progress: number;      // Current Ep/Ch
+  episodes?: number;    // Total Ep/Ch
+  runtime?: string;     // Added this
+  genres?: string[];
+  mediaTypeBadge?: string;
 }

@@ -5,11 +5,13 @@ import { Media } from '@/types';
 import { useMediaStore } from '@/store/mediaStore';
 import { X, Plus, Minus } from 'lucide-react';
 
+// 1. Explicitly define the Props interface
 interface EditMediaModalProps {
   item: Media;
   onClose: () => void;
 }
 
+// 2. Apply the interface to the component
 export default function EditMediaModal({ item, onClose }: EditMediaModalProps) {
   const updateMedia = useMediaStore(state => state.updateMedia);
   const [progress, setProgress] = useState(item.progress || 0);
@@ -49,7 +51,7 @@ export default function EditMediaModal({ item, onClose }: EditMediaModalProps) {
             <button 
               type="button"
               onClick={() => handleProgressChange(progress - 1)} 
-              className="p-5 bg-neutral-800 rounded-2xl text-white active:scale-90 transition-transform hover:bg-neutral-700"
+              className="p-5 bg-neutral-800 rounded-2xl text-white active:scale-90 transition-transform"
             >
               <Minus size={20} />
             </button>
@@ -57,6 +59,7 @@ export default function EditMediaModal({ item, onClose }: EditMediaModalProps) {
             <div className="flex flex-col items-center">
               <input 
                 type="number" 
+                // Using Tailwind utility to hide number arrows (spinners)
                 className="w-20 bg-transparent text-center text-3xl font-black text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={progress}
                 onChange={(e) => handleProgressChange(parseInt(e.target.value) || 0)}
@@ -69,7 +72,7 @@ export default function EditMediaModal({ item, onClose }: EditMediaModalProps) {
             <button 
               type="button"
               onClick={() => handleProgressChange(progress + 1)} 
-              className="p-5 bg-white rounded-2xl text-black active:scale-90 transition-transform hover:bg-neutral-200"
+              className="p-5 bg-white rounded-2xl text-black active:scale-90 transition-transform"
             >
               <Plus size={20} />
             </button>
