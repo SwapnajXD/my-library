@@ -15,11 +15,13 @@ export interface MalRawResult {
 
 export interface MediaItem {
   id: string;
-  source: 'MAL' | 'GoogleBooks';
   title: string;
   authors: string[];
   cover: string;
   rating: number;
+  source: 'MAL';
+  year?: number | string;   // Add this
+  synopsis?: string;        // Add this
 }
 
 export const searchManga = async (query: string): Promise<MediaItem[]> => {

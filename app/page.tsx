@@ -1,211 +1,156 @@
 "use client";
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Moon, Sun } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useLibraryStore } from '@/store/libraryStore';
-import { Book } from '@/types';
-import { searchManga, MediaItem } from '@/services/malApi'; // Import MediaItem type
-import { BOOK_STATUS, formatStatus } from '@/constants/library'; 
-import { useTheme } from '@/context/ThemeContext';
-
-// Components
-import BookCard from '@/components/library/BookCard';
-import BookModal from '@/components/library/BookModal';
-import AddSearch from '@/components/search/AddSearch';
+import { useState } from "react";
+import { useMediaStore } from "@/store/mediaStore";
+import MediaCard from "@/components/media/MediaCard";
+import AddSearch from "@/components/search/AddSearch";
+import { useTheme } from "@/context/ThemeContext";
+import { Sun, Moon, Library, X, Star, Plus } from "lucide-react";
+import { Media } from "@/types";
 
 export default function Home() {
-  // Hooks
-  const { books, addBook, updateBook, deleteBook } = useLibraryStore();
   const { theme, toggleTheme } = useTheme();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<string>('all');
+  const { media, deleteMedia, updateMedia } = useMediaStore();
   
-  const [isBookModalOpen, setIsBookModalOpen] = useState(false);
-  const [editingBook, setEditingBook] = useState<Book | undefined>(undefined);
-  const [isAddSearchOpen, setIsAddSearchOpen] = useState(false);
+  // Modals state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Media | null>(null);
 
-  const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(search.toLowerCase()) || 
-                          book.author.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'all' || book.status === filter;
-    return matchesSearch && matchesFilter;
-  });
-
-  // FIX: Explicitly map 'authors' (array) to 'author' (string)
-  const handleImport = (item: MediaItem) => {
-    const newBook: Omit<Book, 'id'> = {
-      title: item.title,
-      author: item.authors[0] || 'Unknown Author', 
-      status: 'toread', 
-      rating: item.rating || 0, 
-      cover: item.cover
-    };
-    addBook(newBook);
-    setIsAddSearchOpen(false);
-  };
-
-  const handleManualAdd = (query: string) => {
-    const tempBook: Book = {
-      id: Date.now().toString(),
-      title: query,
-      author: '',
-      status: 'toread',
-      rating: 0,
-      cover: ''
-    };
-    setEditingBook(tempBook);
-    setIsBookModalOpen(true);
-  };
-
-  const handleSave = (bookData: Omit<Book, 'id'>) => {
-    const isExisting = editingBook ? books.some(b => b.id === editingBook.id) : false;
-    if (editingBook && isExisting) {
-      updateBook(editingBook.id, bookData);
-    } else {
-      addBook(bookData);
+  const handleUpdateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingItem) {
+      updateMedia(editingItem.id, editingItem);
+      setEditingItem(null);
     }
   };
 
-  const openEditModal = (book: Book) => {
-    setEditingBook(book);
-    setIsBookModalOpen(true);
-  };
-
   return (
-    <main className={`min-h-screen pb-12 font-sans transition-colors duration-200 
-      ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-linear-to-br from-slate-50 to-slate-100 text-slate-800'}`}>
-      
-      {/* Header */}
-      <header className={`sticky top-0 z-40 backdrop-blur-lg border-b transition-colors duration-200
-        ${theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-white/70 border-slate-200/50 shadow-sm'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.5 }}>
-                <Plus className={`p-2 rounded-xl shadow-lg shadow-indigo-500/20 ${theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-linear-to-br from-indigo-600 to-violet-600 text-white'}`} />
-             </motion.div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-indigo-500 to-violet-500">
-                LibManager
-              </h1>
-              <p className={`text-xs font-semibold uppercase tracking-widest ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Digital Collection</p>
-            </div>
-          </div>
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+      {/* Navigation */}
+      <header className="p-6 flex justify-between items-center border-b dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40">
+        <div className="flex items-center gap-2">
+          <Library className="text-indigo-600" size={28} />
+          <h1 className="text-xl font-bold dark:text-white tracking-tight">MediaManager</h1>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all active:scale-95"
+          >
+            <Plus size={20} />
+            Add Media
+          </button>
           
-          <div className="flex gap-3">
-             {/* Theme Toggle */}
-             <button 
-              onClick={toggleTheme}
-              className={`p-2.5 rounded-xl transition-all flex items-center justify-center border ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
-            >
-              {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </button>
-            
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsAddSearchOpen(true)}
-              className={`group flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 border
-                ${theme === 'dark' 
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white border-transparent' 
-                  : 'bg-linear-to-r from-indigo-600 to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 text-white border-transparent'}`}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Item</span>
-            </motion.button>
-          </div>
+          <button 
+            onClick={toggleTheme} 
+            className="p-3 rounded-2xl bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-sm"
+          >
+            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} className="text-yellow-400" />}
+          </button>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-8">
-        
-        {/* Controls */}
-        <div className="flex flex-col md:flex-row gap-6 justify-between items-center p-2">
-          <div className="relative w-full md:w-96 group">
-            <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
-              <Search className="h-5 w-5 group-focus-within:text-indigo-500 transition-colors" />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search your collection..." 
-              className={`w-full pl-11 pr-4 py-3 rounded-2xl focus:shadow-lg transition-all outline-none
-                ${theme === 'dark' 
-                  ? 'bg-slate-900 border-none text-white focus:ring-2 focus:ring-indigo-500/50' 
-                  : 'bg-white border-none text-slate-700 focus:ring-2 focus:ring-indigo-500/50'}`}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+      <div className="max-w-7xl mx-auto p-6 space-y-12">
+        {/* Statistics Bar (Optional) */}
+        <section className="flex gap-4 overflow-x-auto pb-2">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border dark:border-slate-800 min-w-35">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total</p>
+            <p className="text-2xl font-black dark:text-white">{media.length}</p>
+          </div>
+        </section>
+
+        {/* Library Grid */}
+        <section>
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold dark:text-white">Your Collection</h2>
           </div>
 
-          <div className={`flex p-1.5 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
-            {BOOK_STATUS.map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all duration-200 ${
-                  filter === f 
-                    ? (theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 shadow-sm') 
-                    : (theme === 'dark' ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-50')
-                }`}
-              >
-                {formatStatus(f)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Grid */}
-        <AnimatePresence>
-          {filteredBooks.length > 0 ? (
-            <motion.div 
-              layout
-              key={filter} // Force animation on filter change
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
-            >
-              {filteredBooks.map((book, index) => (
-                <motion.div
-                  key={book.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: index * 0.05 }} // Stagger effect
-                >
-                  <BookCard book={book} onEdit={() => openEditModal(book)} />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-24 text-center"
-            >
-              <div className={`p-6 rounded-full mb-4 ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
-                <Search className={`w-12 h-12 ${theme === 'dark' ? 'text-slate-600' : 'text-slate-400'}`} />
+          {media.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[40px] text-center">
+              <div className="bg-slate-100 dark:bg-slate-900 p-6 rounded-full mb-4">
+                <Plus size={40} className="text-slate-300 dark:text-slate-700" />
               </div>
-              <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>No books found</h3>
-              <p className={`mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>Try adjusting your filters or add a new book to get started.</p>
-            </motion.div>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">Your library is empty.</p>
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="mt-4 text-indigo-600 font-bold hover:underline"
+              >
+                Click here to add your first item
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+              {media.map((item) => (
+                <MediaCard 
+                  key={item.id} 
+                  item={item} 
+                  onEdit={() => setEditingItem(item)} 
+                  onDelete={() => deleteMedia(item.id)}
+                />
+              ))}
+            </div>
           )}
-        </AnimatePresence>
+        </section>
       </div>
 
+      {/* Search Modal */}
       <AddSearch 
-        isOpen={isAddSearchOpen}
-        onClose={() => setIsAddSearchOpen(false)}
-        onImport={handleImport} // Using the fixed function
-        onManualAdd={handleManualAdd}
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
       />
 
-      <BookModal 
-        isOpen={isBookModalOpen} 
-        onClose={() => setIsBookModalOpen(false)} 
-        onSave={handleSave}
-        onDelete={editingBook && editingBook.id ? () => deleteBook(editingBook.id) : undefined}
-        initialData={editingBook && editingBook.id ? editingBook : undefined}
-      />
+      {/* Edit Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 z-110 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border dark:border-slate-700">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold dark:text-white truncate pr-4">{editingItem.title}</h3>
+              <button onClick={() => setEditingItem(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full dark:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubmit} className="space-y-6">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Status</label>
+                <select 
+                  value={editingItem.status}
+                  onChange={(e) => setEditingItem({...editingItem, status: e.target.value as any})}
+                  className="w-full p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 dark:text-white outline-none border-2 border-transparent focus:border-indigo-500 appearance-none cursor-pointer"
+                >
+                  <option value="towatch">To Watch / Read</option>
+                  <option value="watching">Watching / Reading</option>
+                  <option value="completed">Completed</option>
+                  <option value="dropped">Dropped</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Your Rating</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setEditingItem({...editingItem, rating: num})}
+                      className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all ${
+                        editingItem.rating >= num ? 'bg-yellow-400 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <Star size={20} fill={editingItem.rating >= num ? "currentColor" : "none"} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all">
+                Update Item
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

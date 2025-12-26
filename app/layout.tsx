@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { LibraryProvider } from "@/context/LibraryContext";
-import { ThemeProvider } from "@/context/ThemeContext";
 
-const inter = Inter({ subsets: ["latin"] });
+import { ThemeProvider } from "@/context/ThemeContext";
+import { LibraryProvider } from "@/context/LibraryContext";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: "My Digital Library",
-  description: "Organize your book collection",
+  title: "MediaManager",
+  description: "Organize your Manga, Anime, Movies, and TV Series",
 };
 
 export default function RootLayout({
@@ -18,7 +27,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* Wrap children in both providers */}
         <ThemeProvider>
           <LibraryProvider>
             {children}

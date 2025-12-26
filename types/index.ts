@@ -1,10 +1,15 @@
-export type BookStatus = 'reading' | 'completed' | 'toread';
+// types/index.ts
+export type MediaStatus = 'reading' | 'watching' | 'completed' | 'toread' | 'towatch';
+export type MediaType = 'manga' | 'anime' | 'movie' | 'tv';
 
-export interface Book {
+export interface Media {
   id: string;
+  type: MediaType;
   title: string;
-  author: string;
-  status: BookStatus;
+  creator: string;     
+  poster: string;      
   rating: number;
-  cover?: string;
+  status: MediaStatus;
+  year?: number | string;
+  synopsis?: string;
 }
