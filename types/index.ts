@@ -5,7 +5,7 @@ export type MediaStatus = 'watching' | 'reading' | 'completed' | 'plan_to_watch'
 export interface Media {
   id: string;
   title: string;
-  creator?: string;      // Author for books/manga
+  creator?: string;      // Author for books
   status: MediaStatus;
   rating: number;
   type: MediaType;
@@ -13,8 +13,7 @@ export interface Media {
   year?: number;
   synopsis?: string;
   genres?: string[];
-  progress: number;      // Current Page / Chapter
-  episodes?: number;     // Total Pages / Chapters
-  runtime?: string;
+  progress: number;      // Current Page
+  episodes?: number;     // Total Pages
   mediaTypeBadge?: string;
 }

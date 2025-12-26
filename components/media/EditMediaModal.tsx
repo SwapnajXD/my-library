@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from 'react';
-import { Media } from '@/types';
+import { Media, MediaStatus } from '@/types';
 import { useMediaStore } from '@/store/mediaStore';
-import { X, Plus, Minus, CheckCircle2 } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 
 interface EditMediaModalProps {
   item: Media;
@@ -11,85 +10,81 @@ interface EditMediaModalProps {
 }
 
 export default function EditMediaModal({ item, onClose }: EditMediaModalProps) {
-  const updateMedia = useMediaStore(state => state.updateMedia);
-  const [progress, setProgress] = useState(item.progress || 0);
-  const [status, setStatus] = useState<Media['status']>(item.status || 'watching');
+  // Pulling the correct functions from your store
+  const updateProgress = useMediaStore(state => state.updateProgress);
+  const updateStatus = useMediaStore(state => state.updateStatus);
+  
+  const isReading = item.type === 'book' || item.type === 'manga';
 
-  const handleProgressChange = (val: number) => {
+  const adjust = (val: number) => {
+    const next = item.progress + val;
+    // Check against total episodes/pages if they exist
     const max = item.episodes || Infinity;
-    const newProgress = Math.max(0, Math.min(val, max));
-    setProgress(newProgress);
-    
-    // Auto-switch to completed if max reached
-    if (item.episodes && newProgress >= item.episodes) {
-      setStatus('completed');
+    if (next >= 0 && next <= max) {
+      updateProgress(item.id, next);
     }
   };
 
-  const handleSave = () => {
-    updateMedia(item.id, { 
-      progress: Number(progress),
-      status: status
-    });
-    onClose();
+  const handleStatusChange = (newStatus: MediaStatus) => {
+    updateStatus(item.id, newStatus);
   };
 
-  const statusOptions: { id: Media['status']; label: string }[] = [
-    { id: 'watching', label: 'Watching' },
-    { id: 'completed', label: 'Completed' },
-    { id: 'plan_to_watch', label: 'Plan' },
-  ];
-
   return (
-    <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-      <div className="bg-[#050505] w-full max-w-xs border border-neutral-900 rounded-[40px] overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-neutral-900 flex justify-between items-center">
-          <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Tracking</span>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white"><X size={18} /></button>
+    <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+      <div className="bg-[#0A0A0A] w-full max-w-md rounded-[40px] border border-neutral-900 p-10 shadow-3xl text-center">
+        <div className="flex justify-between items-center mb-8">
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-600">Tracking</span>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+            <X size={20}/>
+          </button>
         </div>
 
-        <div className="p-8 space-y-6 text-center">
-          <div className="text-left">
-            <h3 className="text-white font-bold text-base truncate mb-1">{item.title}</h3>
-            <span className="text-[10px] font-black text-yellow-500 uppercase">Score: {item.rating?.toFixed(1)}</span>
+        <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
+        <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-10">
+          Currently on {isReading ? 'Page / Chapter' : 'Episode'} {item.progress}
+        </p>
+
+        {/* Counter */}
+        <div className="flex items-center justify-center gap-10 mb-10">
+          <button 
+            onClick={() => adjust(-1)} 
+            className="p-5 bg-neutral-900 rounded-3xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all active:scale-90"
+          >
+            <Minus size={24} />
+          </button>
+          
+          <div className="flex flex-col items-center">
+             <span className="text-6xl font-black text-white tabular-nums tracking-tighter">{item.progress}</span>
+             {item.episodes ? (
+               <span className="text-[10px] font-bold text-neutral-700 uppercase mt-2">of {item.episodes}</span>
+             ) : null}
           </div>
 
-          {/* Status Toggle */}
-          <div className="flex bg-neutral-950 p-1 rounded-2xl border border-neutral-900 gap-1">
-            {statusOptions.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setStatus(opt.id)}
-                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter transition-all ${
-                  status === opt.id ? 'bg-white text-black' : 'text-neutral-600 hover:text-neutral-400'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <button 
+            onClick={() => adjust(1)} 
+            className="p-5 bg-white text-black rounded-3xl hover:bg-neutral-200 transition-all active:scale-90"
+          >
+            <Plus size={24} />
+          </button>
+        </div>
 
-          {/* Progress Controls */}
-          <div className="flex items-center justify-between bg-neutral-900/50 rounded-3xl p-2 border border-neutral-800">
-            <button onClick={() => handleProgressChange(progress - 1)} className="p-5 bg-neutral-800 rounded-2xl text-white active:scale-90 transition-transform">
-              <Minus size={20} />
-            </button>
-            <div className="flex flex-col items-center">
-              <input 
-                type="number" 
-                className="w-16 bg-transparent text-center text-3xl font-black text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                value={progress}
-                onChange={(e) => handleProgressChange(parseInt(e.target.value) || 0)}
-              />
-              <span className="text-[9px] font-bold text-neutral-600 uppercase">/ {item.episodes || '??'}</span>
-            </div>
-            <button onClick={() => handleProgressChange(progress + 1)} className="p-5 bg-white rounded-2xl text-black active:scale-90 transition-transform">
-              <Plus size={20} />
-            </button>
-          </div>
-
-          <button onClick={handleSave} className="w-full py-5 rounded-3xl bg-white text-black text-[11px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-            <CheckCircle2 size={14} /> Save Changes
+        {/* Status Selector */}
+        <div className="grid grid-cols-2 gap-2 p-1.5 bg-black rounded-2xl border border-neutral-900">
+          <button 
+            onClick={() => handleStatusChange(isReading ? 'reading' : 'watching')}
+            className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              item.status !== 'completed' ? 'bg-neutral-800 text-white' : 'text-neutral-600 hover:text-neutral-400'
+            }`}
+          >
+            {isReading ? 'Reading' : 'Watching'}
+          </button>
+          <button 
+            onClick={() => handleStatusChange('completed')}
+            className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              item.status === 'completed' ? 'bg-green-600 text-white' : 'text-neutral-600 hover:text-neutral-400'
+            }`}
+          >
+            Completed
           </button>
         </div>
       </div>
