@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Media, MediaStatus } from '@/types'; // Added MediaStatus import here
+import { Media, MediaStatus } from '@/types';
 
 interface MediaState {
   media: Media[];
   addMedia: (item: Media) => void;
   updateMedia: (id: string, updates: Partial<Media>) => void;
   updateProgress: (id: string, newProgress: number) => void; 
-  updateStatus: (id: string, status: MediaStatus) => void; // Added to interface
+  updateStatus: (id: string, status: MediaStatus) => void;
   deleteMedia: (id: string) => void;
 }
 
@@ -42,6 +42,6 @@ export const useMediaStore = create<MediaState>()(
         media: state.media.filter((m) => m.id !== id)
       })),
     }),
-    { name: 'media-storage' }
+    { name: 'vault-storage' }
   )
 );

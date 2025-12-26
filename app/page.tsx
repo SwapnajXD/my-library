@@ -13,7 +13,7 @@ export default function Page() {
   
   // Modal states
   const [viewingItem, setViewingItem] = useState<Media | null>(null);
-  const [editingItem, setEditingItem] = useState<Media | null>(null);
+  const [isEditing, setIsEditing] = useState(false); // Changed to boolean flag
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   return (
@@ -36,7 +36,6 @@ export default function Page() {
               key={item.id} 
               item={item} 
               onView={(it: Media) => setViewingItem(it)} 
-              // Instant deletion logic
               onDelete={(it: Media) => deleteMedia(it.id)}
             />
           ))}
@@ -46,25 +45,25 @@ export default function Page() {
       {/* Global Search/Add Modal */}
       <AddSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* Info Tab Modal */}
+      {/* Info Tab Modal (The Base Layer) */}
       {viewingItem && (
         <MediaModal 
           item={viewingItem} 
-          onClose={() => setViewingItem(null)} 
-          onEdit={() => { 
-            // Transition from Info Tab to Progress Editor
-            const itemToEdit = viewingItem;
-            setViewingItem(null); 
-            setEditingItem(itemToEdit); 
+          // If we are editing, Esc shouldn't close the Info Tab
+          onClose={() => {
+            if (!isEditing) setViewingItem(null);
           }} 
+          onEdit={() => setIsEditing(true)} 
         />
       )}
 
-      {/* Progress Editor Modal */}
-      {editingItem && (
+      {/* Progress Editor Modal (The Top Layer) */}
+      {isEditing && viewingItem && (
         <EditMediaModal 
-          item={editingItem} 
-          onClose={() => setEditingItem(null)} 
+          item={viewingItem} 
+          // Closing this just sets isEditing to false, 
+          // revealing the MediaModal underneath
+          onClose={() => setIsEditing(false)} 
         />
       )}
     </main>
