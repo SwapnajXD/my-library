@@ -2,16 +2,15 @@
 
 import { Media } from '@/types';
 import { useMediaStore } from '@/store/mediaStore';
-import { Star, Plus, Minus, Info, PlayCircle, BookOpen, Hash } from 'lucide-react';
+import { Star, Plus, Minus } from 'lucide-react';
 
 interface MediaCardProps { 
   item: Media; 
   onView: (item: Media) => void; 
-  onEdit: (item: Media) => void;
-  onDelete: (item: Media) => void; // Added this to match page.tsx
+  onDelete: (item: Media) => void;
 }
 
-export default function MediaCard({ item, onView, onEdit, onDelete }: MediaCardProps) {
+export default function MediaCard({ item, onView, onDelete }: MediaCardProps) {
   const updateProgress = useMediaStore(state => state.updateProgress);
 
   const adjustProgress = (amount: number) => {
@@ -32,46 +31,39 @@ export default function MediaCard({ item, onView, onEdit, onDelete }: MediaCardP
         />
         
         <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 z-20 backdrop-blur-[2px]">
-          <button onClick={() => onView(item)} className="w-32 flex items-center justify-center gap-2 bg-white text-black py-2.5 rounded-full text-[10px] font-black uppercase tracking-tighter hover:scale-105 transition-transform">
-            <Info size={14} /> Info
+          <button onClick={() => onView(item)} className="w-32 py-2.5 bg-white text-black rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:scale-105 transition-transform">
+            Details
           </button>
-          <button onClick={() => onEdit(item)} className="w-32 flex items-center justify-center gap-2 bg-neutral-800 text-white py-2.5 rounded-full text-[10px] font-black uppercase tracking-tighter hover:bg-neutral-700 transition-colors">
-            <Hash size={14} /> Progress
-          </button>
-          {/* Optional: Add a subtle delete button here if you want it visible on hover */}
-          <button onClick={() => onDelete(item)} className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest hover:text-red-500 transition-colors mt-2">
+          <button onClick={() => onDelete(item)} className="text-[9px] text-neutral-600 font-bold uppercase tracking-[0.2em] hover:text-red-500 transition-colors mt-2">
             Remove
           </button>
         </div>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-4">
         <h3 className="font-bold text-sm truncate text-neutral-100 text-left">{item.title}</h3>
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 bg-neutral-800/40 px-2 py-0.5 rounded-md border border-neutral-800">
+          <div className="flex items-center gap-1.5 bg-neutral-800/40 px-2 py-0.5 rounded-lg border border-neutral-800">
              <Star size={10} className="text-yellow-500 fill-yellow-500" />
              <span className="text-[11px] font-black text-neutral-200">{item.rating?.toFixed(1)}</span>
           </div>
-          <div className="flex items-center gap-1 text-neutral-500">
-            {item.type === 'manga' ? <BookOpen size={12} /> : <PlayCircle size={12} />}
-            <span className="text-[10px] font-bold uppercase tracking-tighter">
-                {item.progress || 0} / {item.episodes || '??'}
-            </span>
-          </div>
+          <span className="text-[10px] font-black text-neutral-500 tracking-tighter">
+            {item.progress} <span className="text-neutral-700 mx-0.5">/</span> {item.episodes || '??'}
+          </span>
         </div>
 
         {item.type !== 'movie' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-neutral-800/30">
+          <div className="flex items-center gap-3 pt-1">
             <div className="flex-1 h-1 bg-neutral-900 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-white transition-all duration-500" 
+                className="h-full bg-white transition-all duration-500 ease-out" 
                 style={{ width: `${item.episodes ? Math.min(((item.progress || 0) / item.episodes) * 100, 100) : 0}%` }}
               />
             </div>
-            <div className="flex gap-1">
-              <button onClick={() => adjustProgress(-1)} className="p-1 hover:text-white text-neutral-500 transition-colors"><Minus size={12} /></button>
-              <button onClick={() => adjustProgress(1)} className="p-1 hover:text-white text-neutral-500 transition-colors"><Plus size={12} /></button>
+            <div className="flex gap-2">
+              <button onClick={() => adjustProgress(-1)} className="text-neutral-600 hover:text-white transition-colors"><Minus size={14} /></button>
+              <button onClick={() => adjustProgress(1)} className="text-neutral-600 hover:text-white transition-colors"><Plus size={14} /></button>
             </div>
           </div>
         )}
