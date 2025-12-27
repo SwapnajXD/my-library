@@ -1,10 +1,10 @@
 "use client";
 
 import { useMediaStore } from "@/store/mediaStore";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { 
   RefreshCw, Maximize2, Search, Database, 
-  X, Cpu, Terminal 
+  X, ExternalLink, Cpu, Terminal, Eye, EyeOff, ZoomIn, ZoomOut
 } from "lucide-react";
 
 interface Node {
@@ -14,9 +14,12 @@ interface Node {
   poster?: string;
   x: number;
   y: number;
-  vx: number; // Velocity X
-  vy: number; // Velocity Y
+  vx: number;
+  vy: number;
+  creatorId?: string;
   isMatch?: boolean;
+  isFixed?: boolean;
+  isStatic?: boolean;
 }
 
 interface Link {
@@ -32,115 +35,124 @@ export function RelationshipGraph() {
   const [links, setLinks] = useState<Link[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  
+  // Navigation State
+  const [zoom, setZoom] = useState(0.4); // Start zoomed out for large datasets
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isIsolated, setIsIsolated] = useState(false);
 
-  // Dragging state
-  const dragTarget = useRef<string | null>(null);
+  const dragTargetId = useRef<string | null>(null);
+  const lastMousePos = useRef({ x: 0, y: 0 });
   const requestRef = useRef<number>(null);
 
-  const WIDTH = 1200;
-  const HEIGHT = 700;
-  const FRICTION = 0.92; // Adjust this to decrease velocity (0.98 = fast, 0.8 = slow)
-  const REPULSION = 500; // How much nodes push each other
+  // Large Dataset Constants
+  const WIDTH = 3000; // Expanded workspace for 600 nodes
+  const HEIGHT = 2000;
+  const FRICTION = 0.75; 
+  const REPULSION = 1200; 
+  const ATTRACTION = 0.015;
+  const GRID_SIZE = 100; 
 
-  // 1. Initialize Nodes and Links
-  useEffect(() => {
-    if (!media || media.length === 0) return;
+  const initializeGraph = useCallback(() => {
+    if (!media.length) return;
+    const initNodes: Node[] = [];
+    const initLinks: Link[] = [];
+    const creators: Record<string, string[]> = {};
 
-    const initialNodes: Node[] = [];
-    const initialLinks: Link[] = [];
-    const creatorMap: Record<string, string[]> = {};
-
-    media.forEach(item => {
-      const cName = item.creator || "Unknown";
-      if (!creatorMap[cName]) creatorMap[cName] = [];
-      creatorMap[cName].push(item.id);
+    media.forEach(m => {
+      const c = m.creator || "Unknown";
+      if (!creators[c]) creators[c] = [];
+      creators[c].push(m.id);
     });
 
-    Object.entries(creatorMap).forEach(([creator, itemIds]) => {
-      const cId = `creator-${creator}`;
-      initialNodes.push({ 
-        id: cId, label: creator, type: 'creator', 
-        x: WIDTH / 2 + (Math.random() - 0.5) * 400, 
-        y: HEIGHT / 2 + (Math.random() - 0.5) * 400,
-        vx: 0, vy: 0 
+    const creatorEntries = Object.entries(creators);
+    creatorEntries.forEach(([c, items], idx) => {
+      const cId = `creator-${c}`;
+      // Spread creators across a much wider area
+      const centerX = (WIDTH / (creatorEntries.length + 1)) * (idx + 1);
+      const centerY = HEIGHT / 2;
+
+      initNodes.push({ 
+        id: cId, label: c, type: 'creator', 
+        x: centerX, y: centerY, 
+        vx: 0, vy: 0, isFixed: false, isStatic: true 
       });
 
-      itemIds.forEach(id => {
+      items.forEach(id => {
         const item = media.find(m => m.id === id);
-        initialNodes.push({ 
-          id, label: item?.title || "", type: 'media', poster: item?.poster,
-          x: WIDTH / 2 + (Math.random() - 0.5) * 400, 
-          y: HEIGHT / 2 + (Math.random() - 0.5) * 400,
-          vx: 0, vy: 0 
+        initNodes.push({ 
+          id, label: item?.title || "", type: 'media', poster: item?.poster, 
+          creatorId: cId,
+          x: centerX + (Math.random() - 0.5) * 600, 
+          y: centerY + (Math.random() - 0.5) * 600, 
+          vx: 0, vy: 0, isFixed: false, isStatic: false
         });
-        initialLinks.push({ sourceId: cId, targetId: id });
+        initLinks.push({ sourceId: cId, targetId: id });
       });
     });
-
-    setNodes(initialNodes);
-    setLinks(initialLinks);
+    setNodes(initNodes);
+    setLinks(initLinks);
+    setViewOffset({ x: 0, y: 0 });
   }, [media]);
 
-  // 2. Physics Engine (Manual Force Directed Graph)
+  useEffect(() => { initializeGraph(); }, [initializeGraph]);
+
+  // Handle Wheel Zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const zoomSpeed = 0.001;
+    const delta = -e.deltaY;
+    const newZoom = Math.min(Math.max(zoom + delta * zoomSpeed, 0.1), 3);
+    setZoom(newZoom);
+  };
+
   const updatePhysics = () => {
-    setNodes(prevNodes => {
-      const newNodes = prevNodes.map(n => ({ ...n }));
-
-      // Repulsion (Nodes push each other)
-      for (let i = 0; i < newNodes.length; i++) {
-        for (let j = i + 1; j < newNodes.length; j++) {
-          const dx = newNodes[i].x - newNodes[j].x;
-          const dy = newNodes[i].y - newNodes[j].y;
-          const distance = Math.sqrt(dx * dx + dy * dy) + 1;
-          const force = REPULSION / (distance * distance);
+    setNodes(prev => {
+      const next = prev.map(n => ({ ...n }));
+      // Optimization: Only run physics on non-static nodes
+      const activeNodes = next.filter(n => !n.isStatic && !n.isFixed);
+      
+      for (let i = 0; i < next.length; i++) {
+        for (let j = i + 1; j < next.length; j++) {
+          const dx = next[i].x - next[j].x;
+          const dy = next[i].y - next[j].y;
+          const distSq = dx * dx + dy * dy + 1;
+          if (distSq > 100000) continue; // Skip distant nodes for 600+ node perf
           
-          const fx = (dx / distance) * force;
-          const fy = (dy / distance) * force;
-
-          newNodes[i].vx += fx;
-          newNodes[i].vy += fy;
-          newNodes[j].vx -= fx;
-          newNodes[j].vy -= fy;
+          const force = REPULSION / distSq;
+          if (!next[i].isStatic && !next[i].isFixed) {
+            next[i].vx += (dx / Math.sqrt(distSq)) * force;
+            next[i].vy += (dy / Math.sqrt(distSq)) * force;
+          }
+          if (!next[j].isStatic && !next[j].isFixed) {
+            next[j].vx -= (dx / Math.sqrt(distSq)) * force;
+            next[j].vy -= (dy / Math.sqrt(distSq)) * force;
+          }
         }
       }
 
-      // Attraction (Links pull nodes together)
-      links.forEach(link => {
-        const source = newNodes.find(n => n.id === link.sourceId);
-        const target = newNodes.find(n => n.id === link.targetId);
-        if (source && target) {
-          const dx = target.x - source.x;
-          const dy = target.y - source.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const force = (distance - 100) * 0.01; // Spring constant
-
-          source.vx += (dx / distance) * force;
-          source.vy += (dy / distance) * force;
-          target.vx -= (dx / distance) * force;
-          target.vy -= (dy / distance) * force;
+      links.forEach(l => {
+        const s = next.find(n => n.id === l.sourceId);
+        const t = next.find(n => n.id === l.targetId);
+        if (s && t) {
+          const dx = t.x - s.x;
+          const dy = t.y - s.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = (dist - 180) * ATTRACTION;
+          if (!s.isStatic && !s.isFixed) { s.vx += (dx / dist) * force; s.vy += (dy / dist) * force; }
+          if (!t.isStatic && !t.isFixed) { t.vx -= (dx / dist) * force; t.vy -= (dy / dist) * force; }
         }
       });
 
-      // Update positions
-      return newNodes.map(node => {
-        if (node.id === dragTarget.current) return node; // Don't move if being dragged
-
-        node.vx *= FRICTION; // Velocity decrease
-        node.vy *= FRICTION;
-        node.x += node.vx;
-        node.y += node.vy;
-
-        // Boundary checks
-        if (node.x < 0) node.x = 0;
-        if (node.x > WIDTH) node.x = WIDTH;
-        if (node.y < 0) node.y = 0;
-        if (node.y > HEIGHT) node.y = HEIGHT;
-
-        return node;
+      return next.map(n => {
+        if (n.isStatic || n.isFixed) return n;
+        n.vx *= FRICTION; n.vy *= FRICTION;
+        n.x = Math.max(100, Math.min(WIDTH - 100, n.x + n.vx));
+        n.y = Math.max(100, Math.min(HEIGHT - 100, n.y + n.vy));
+        return n;
       });
     });
-
     requestRef.current = requestAnimationFrame(updatePhysics);
   };
 
@@ -149,125 +161,156 @@ export function RelationshipGraph() {
     return () => cancelAnimationFrame(requestRef.current!);
   }, [links]);
 
-  // 3. Drag Handlers
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragTarget.current || !containerRef.current) return;
-    
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / zoom;
-    const y = (e.clientY - rect.top) / zoom;
-
-    setNodes(prev => prev.map(n => n.id === dragTarget.current ? { ...n, x, y, vx: 0, vy: 0 } : n));
+  const onMouseDown = (e: React.MouseEvent, id?: string) => {
+    if (id) {
+      dragTargetId.current = id;
+      setSelectedNodeId(id);
+      setNodes(prev => prev.map(n => n.id === id ? { ...n, isFixed: true, vx: 0, vy: 0 } : n));
+    } else {
+      setIsPanning(true);
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+    }
   };
 
-  const displayNodes = useMemo(() => {
-    if (!searchQuery) return nodes;
-    const q = searchQuery.toLowerCase();
-    return nodes.map(n => ({ ...n, isMatch: n.label.toLowerCase().includes(q) }));
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (dragTargetId.current && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = (e.clientX - rect.left - viewOffset.x) / zoom;
+      const y = (e.clientY - rect.top - viewOffset.y) / zoom;
+      setNodes(prev => prev.map(n => n.id === dragTargetId.current ? { ...n, x, y } : n));
+    } else if (isPanning) {
+      const dx = e.clientX - lastMousePos.current.x;
+      const dy = e.clientY - lastMousePos.current.y;
+      setViewOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+    }
+  };
+
+  const onMouseUp = () => {
+    if (dragTargetId.current) {
+      const id = dragTargetId.current;
+      setNodes(prev => prev.map(n => {
+        if (n.id === id) {
+          const snappedX = Math.round(n.x / GRID_SIZE) * GRID_SIZE;
+          const snappedY = Math.round(n.y / GRID_SIZE) * GRID_SIZE;
+          return { ...n, x: snappedX, y: snappedY, isFixed: false, isStatic: n.type === 'creator', vx: 0, vy: 0 };
+        }
+        return n;
+      }));
+      dragTargetId.current = null;
+    }
+    setIsPanning(false);
+  };
+
+  const processedNodes = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return nodes.map(n => ({ ...n, isMatch: true }));
+    const matches = nodes.map(n => ({ ...n, isMatch: n.label.toLowerCase().includes(q) }));
+    const creatorMatch = matches.find(n => n.type === 'creator' && n.isMatch);
+    if (creatorMatch) {
+      return matches.map(n => n.creatorId === creatorMatch.id ? { ...n, isMatch: true } : n);
+    }
+    return matches;
   }, [nodes, searchQuery]);
 
   const detailedData = useMemo(() => media.find(m => m.id === selectedNodeId), [media, selectedNodeId]);
 
   return (
-    <div className="bg-[#050505] border border-[#1A1A1A] rounded-[40px] p-8 overflow-hidden relative select-none flex flex-col h-[850px] font-mono">
+    <div className="bg-[#050505] border border-[#1A1A1A] rounded-[40px] p-8 flex flex-col h-[900px] font-mono text-white relative overflow-hidden select-none shadow-2xl">
       
-      {/* HUD */}
-      <div className="flex justify-between items-start mb-8 z-30 relative">
+      {/* HUD HEADER */}
+      <div className="flex justify-between items-center mb-6 z-30 relative gap-8">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 border border-sky-500/20 flex items-center justify-center rounded-xl bg-sky-500/5 text-sky-500">
-            <Database size={18} />
+          <div className="w-10 h-10 border border-[#222] flex items-center justify-center rounded-xl bg-black">
+            <Cpu size={18} className="text-sky-500" />
           </div>
-          <div>
-            <h2 className="text-[11px] font-black uppercase tracking-[0.5em] text-white">React Native Physics</h2>
-            <p className="text-[7px] text-sky-500/60 uppercase tracking-widest mt-1">VELOCITY_FRICTION: {FRICTION}</p>
+          <div className="hidden md:block">
+            <h2 className="text-[11px] font-black uppercase tracking-[0.5em] italic">Neural Map v2.0</h2>
+            <p className="text-[7px] font-bold text-sky-500/60 uppercase tracking-[0.3em] mt-1.5">Nodes: {nodes.length} // Zoom: {Math.round(zoom * 100)}%</p>
           </div>
         </div>
 
-        <div className="flex bg-black/50 border border-white/5 rounded-2xl p-1.5 gap-2 backdrop-blur-md">
+        <div className="flex-1 max-w-md relative">
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#333]" />
           <input 
-            type="text"
-            placeholder="FILTER_GRAPH..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent border-none py-2 px-4 text-[10px] text-white w-48 focus:outline-none"
+            type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="SEARCH_600_RECORDS..."
+            className="w-full bg-black/40 border border-[#1A1A1A] rounded-2xl py-3 pl-12 text-[10px] font-black tracking-widest uppercase focus:border-sky-500/50 outline-none"
           />
-          <button onClick={() => setZoom(1)} className="p-2 text-[#444] hover:text-sky-400 transition-colors"><RefreshCw size={14} /></button>
-          <button onClick={() => setZoom(z => z + 0.1)} className="p-2 text-[#444] hover:text-sky-400 transition-colors"><Maximize2 size={14} /></button>
+        </div>
+
+        <div className="flex bg-black/80 border border-[#1A1A1A] rounded-2xl p-1.5 gap-2">
+          <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 3))} className="p-2 text-[#444] hover:text-sky-500"><ZoomIn size={14}/></button>
+          <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 0.1))} className="p-2 text-[#444] hover:text-sky-500"><ZoomOut size={14}/></button>
+          <button onClick={() => { setZoom(0.3); setViewOffset({x:0, y:0}); }} className="p-2 text-[#444] hover:text-sky-500 border-l border-[#222] ml-1"><Maximize2 size={14} /></button>
         </div>
       </div>
 
       <div 
         ref={containerRef}
-        onMouseMove={handleMouseMove}
-        onMouseUp={() => { dragTarget.current = null; }}
-        onMouseLeave={() => { dragTarget.current = null; }}
-        className="relative flex-1 bg-[#020202] rounded-[32px] border border-white/5 overflow-hidden cursor-crosshair"
+        onWheel={handleWheel}
+        onMouseDown={(e) => onMouseDown(e)}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        className={`relative flex-1 bg-[#010101] rounded-[32px] border border-[#111] overflow-hidden ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
-        <svg 
-          width="100%" height="100%" viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
-          className="transition-transform duration-300"
-        >
-          {/* Links */}
-          {links.map((link, i) => {
-            const s = nodes.find(n => n.id === link.sourceId);
-            const t = nodes.find(n => n.id === link.targetId);
-            if (!s || !t) return null;
-            return (
-              <line 
-                key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y}
-                stroke="#1A1A1A" strokeWidth={1}
-              />
-            );
-          })}
+        <svg width="100%" height="100%" className="absolute inset-0">
+          <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }} className="transition-transform duration-75 ease-out">
+            <defs>
+              <pattern id="grid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+                <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#fff" strokeOpacity="0.03" strokeWidth="1"/>
+              </pattern>
+            </defs>
+            <rect width={WIDTH} height={HEIGHT} fill="url(#grid)" />
 
-          {/* Nodes */}
-          {displayNodes.map((node) => (
-            <g 
-              key={node.id} 
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                dragTarget.current = node.id;
-                setSelectedNodeId(node.id);
-              }}
-              className="cursor-grab active:cursor-grabbing"
-              style={{ opacity: searchQuery && !node.isMatch ? 0.1 : 1 }}
-            >
-              {node.type === 'creator' ? (
-                <g>
-                  <circle r="40" cx={node.x} cy={node.y} fill="#000" stroke="#333" />
-                  <Cpu x={node.x - 10} y={node.y - 10} size={20} className="text-sky-500/30" />
-                  <text x={node.x} y={node.y + 60} textAnchor="middle" fill="#444" className="text-[8px] uppercase tracking-widest">{node.label}</text>
+            {links.map((link, i) => {
+              const s = nodes.find(n => n.id === link.sourceId);
+              const t = nodes.find(n => n.id === link.targetId);
+              if (!s || !t) return null;
+              const isMatch = (searchQuery && (s.isMatch || t.isMatch)) || (!searchQuery && (selectedNodeId === s.id || selectedNodeId === t.id));
+              return (
+                <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
+                  stroke={isMatch ? "#0EA5E9" : "#1A1A1A"} 
+                  strokeOpacity={isMatch ? 0.6 : 0.1} strokeWidth={isMatch ? 3 : 1} />
+              );
+            })}
+
+            {processedNodes.map(node => {
+              const highlight = selectedNodeId === node.id || (searchQuery && node.isMatch);
+              const opacity = node.isMatch ? 1 : 0.05;
+              const r = node.type === 'creator' ? 60 : 35;
+
+              return (
+                <g key={node.id} onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, node.id); }} style={{ opacity }} className="transition-opacity duration-500">
+                  {node.type === 'creator' ? (
+                    <g>
+                      <circle r={r} cx={node.x} cy={node.y} fill="#000" stroke={highlight ? "#0EA5E9" : "#333"} strokeWidth="2" />
+                      <text x={node.x} y={node.y + 5} textAnchor="middle" fill={highlight ? "#fff" : "#666"} className="text-[12px] font-black uppercase italic tracking-tighter">{node.label}</text>
+                    </g>
+                  ) : (
+                    <g>
+                      <defs><clipPath id={`c-${node.id}`}><circle r={r-2} cx={node.x} cy={node.y} /></clipPath></defs>
+                      <circle r={r+3} cx={node.x} cy={node.y} fill="#111" stroke={highlight ? "#0EA5E9" : "transparent"} strokeWidth="4" />
+                      <image href={node.poster} x={node.x-r} y={node.y-r} height={r*2} width={r*2} clipPath={`url(#c-${node.id})`} preserveAspectRatio="xMidYMid slice" />
+                    </g>
+                  )}
                 </g>
-              ) : (
-                <g>
-                  <clipPath id={`clip-${node.id}`}><circle r="30" cx={node.x} cy={node.y} /></clipPath>
-                  <circle r="33" cx={node.x} cy={node.y} fill="#111" stroke="#222" />
-                  <image 
-                    href={node.poster} x={node.x - 30} y={node.y - 30} 
-                    height="60" width="60" clipPath={`url(#clip-${node.id})`}
-                    preserveAspectRatio="xMidYMid slice"
-                  />
-                </g>
-              )}
-            </g>
-          ))}
+              );
+            })}
+          </g>
         </svg>
 
-        {/* Sidebar */}
-        <div className={`absolute inset-y-0 right-0 w-80 bg-black/80 backdrop-blur-xl border-l border-white/5 transition-transform duration-500 p-8 ${detailedData ? 'translate-x-0' : 'translate-x-full'}`}>
+        {/* SIDEBAR */}
+        <div className={`absolute top-0 right-0 h-full w-80 bg-black/90 border-l border-white/5 backdrop-blur-xl z-50 transition-transform duration-500 ${detailedData ? 'translate-x-0' : 'translate-x-full'}`}>
           {detailedData && (
-            <div className="relative h-full flex flex-col">
-              <button onClick={() => setSelectedNodeId(null)} className="absolute -top-2 -right-2 p-2 text-white/20 hover:text-white"><X size={20}/></button>
-              <div className="flex items-center gap-2 mb-4">
-                <Terminal size={12} className="text-sky-500" />
-                <span className="text-[9px] text-sky-500 uppercase font-black">Data_Entry</span>
-              </div>
-              <h3 className="text-lg font-bold text-white mb-6 uppercase tracking-tighter">{detailedData.title}</h3>
-              <img src={detailedData.poster} className="w-full rounded-xl border border-white/10 mb-6" alt="" />
-              <div className="p-4 bg-white/5 rounded-lg border border-white/5">
-                <span className="text-[8px] text-white/30 uppercase block mb-1">Creator</span>
-                <p className="text-xs text-white uppercase">{detailedData.creator}</p>
+            <div className="p-8 flex flex-col h-full overflow-y-auto">
+              <button onClick={() => setSelectedNodeId(null)} className="ml-auto text-white/20 hover:text-white"><X size={20}/></button>
+              <h3 className="text-xl font-black text-white uppercase mt-4 leading-tight">{detailedData.title}</h3>
+              <img src={detailedData.poster} className="w-full rounded-xl my-6 border border-white/10" alt="" />
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-white/5 p-3 rounded-lg text-center"><p className="text-sky-500 text-lg font-black">{detailedData.rating}.0</p></div>
+                <div className="bg-white/5 p-3 rounded-lg text-center"><p className="text-[9px] uppercase font-bold">{detailedData.type}</p></div>
               </div>
             </div>
           )}
