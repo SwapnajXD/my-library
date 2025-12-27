@@ -2,7 +2,17 @@
 
 import { useMediaStore } from "@/store/mediaStore";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Activity, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+
+/**
+ * RELATIONSHIP GRAPH - KINETIC GRID ENGINE
+ * ---------------------------------------
+ * Features:
+ * - Physics: Force-directed velocity (vx, vy) with friction damping.
+ * - Alignment: Creator nodes snap to 250px grid intersections.
+ * - Interaction: Kinetic panning, relative-delta dragging, and smooth zoom.
+ * - Search: Auto-panning and selective opacity filtering.
+ */
 
 interface Node {
   id: string;
@@ -21,12 +31,18 @@ interface Link {
   target: string;
 }
 
-export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNodeId }: any) {
+interface GraphProps {
+  searchQuery: string;
+  selectedNodeId: string | null;
+  setSelectedNodeId: (id: string | null) => void;
+}
+
+export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNodeId }: GraphProps) {
   const { media } = useMediaStore();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   
-  const [zoom, setZoom] = useState(0.6); 
+  const [zoom, setZoom] = useState(0.8); 
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -37,17 +53,14 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   const svgRef = useRef<SVGSVGElement>(null);
   const timeRef = useRef(0);
 
-  // --- SYNCED KINETIC PHYSICS ---
-  const FRICTION_MOVING = 0.88;   
-  const FRICTION_STATIC = 0.72;   
-  const ATTRACTION = 0.004;       
-  const TARGET_EDGE_LENGTH = 320; 
-  const REPULSION_DIST = 250;     
-  const REPULSION_STRENGTH = 0.6; 
-  const GRID_SIZE = 1000;         // Wider grid for static centering
-  const SNAP_STRENGTH = 0.15;     // Stronger snap to keep creators at center points
-  const JITTER_SPEED = 0.04;      
-  const JITTER_STRENGTH = 0.12;   
+  // --- GRID ALIGNED PHYSICS CONSTANTS ---
+  const FRICTION = 0.82;         
+  const ATTRACTION = 0.05;      
+  const REPULSION = 0.8;        
+  const TARGET_DIST = 110;      
+  const GRID_STEP = 250;        
+  const JITTER_SPEED = 0.03;    
+  const JITTER_STRENGTH = 0.08; 
 
   const initializeGraph = useCallback(() => {
     if (!media.length) return;
@@ -63,14 +76,12 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
 
     Object.entries(creators).forEach(([name, items], idx) => {
       const cId = `creator-${name.replace(/\s+/g, '-').toLowerCase()}`;
-      
-      // Calculate a static center point on the grid for each creator
       const cols = Math.ceil(Math.sqrt(Object.keys(creators).length));
       const col = idx % cols;
       const row = Math.floor(idx / cols);
       
-      const cx = (col * GRID_SIZE) + (GRID_SIZE / 2); 
-      const cy = (row * GRID_SIZE) + (GRID_SIZE / 2);
+      const cx = col * GRID_STEP; 
+      const cy = row * GRID_STEP;
 
       initNodes.push({ id: cId, label: name, type: 'creator', x: cx, y: cy, vx: 0, vy: 0 });
       
@@ -79,8 +90,8 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
         initNodes.push({ 
           id: item.id, label: item.title, type: 'media', poster: item.poster, 
           creatorId: cId, 
-          x: cx + Math.cos(angle) * TARGET_EDGE_LENGTH, 
-          y: cy + Math.sin(angle) * TARGET_EDGE_LENGTH,
+          x: cx + Math.cos(angle) * TARGET_DIST, 
+          y: cy + Math.sin(angle) * TARGET_DIST,
           vx: 0, vy: 0
         });
         initLinks.push({ source: cId, target: item.id });
@@ -92,52 +103,28 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
 
   useEffect(() => { initializeGraph(); }, [initializeGraph]);
 
-  useEffect(() => {
-    if (!searchQuery || nodes.length === 0) return;
-    const match = nodes.find(n => n.label.toLowerCase().includes(searchQuery.toLowerCase()));
-    if (match && containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      setViewOffset({
-        x: (width / 2) - (match.x * zoom),
-        y: (height / 2) - (match.y * zoom)
-      });
-      setSelectedNodeId(match.id);
-    }
-  }, [searchQuery, zoom]);
-
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(prev => Math.min(Math.max(prev * delta, 0.05), 3));
-    };
-    const container = containerRef.current;
-    if (container) container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container?.removeEventListener('wheel', handleWheel);
-  }, []);
-
   const updateLoop = useCallback(() => {
     timeRef.current += JITTER_SPEED;
 
     setNodes(prevNodes => {
+      if (prevNodes.length === 0) return prevNodes;
       const next = prevNodes.map(n => ({ ...n }));
+      
       for (let i = 0; i < next.length; i++) {
         const node = next[i];
         if (node.id === dragTargetId.current) continue;
 
-        let nvx = node.vx * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
-        let nvy = node.vy * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
+        let nvx = node.vx * FRICTION;
+        let nvy = node.vy * FRICTION;
 
-        // Organic Micro-jitter
         nvx += Math.cos(timeRef.current + i) * JITTER_STRENGTH;
         nvy += Math.sin(timeRef.current * 0.8 + i) * JITTER_STRENGTH;
 
         if (node.type === 'creator') {
-          // LOCK TO GRID CENTER: Finds the nearest 1000x1000 center and pulls hard
-          const targetX = (Math.floor(node.x / GRID_SIZE) * GRID_SIZE) + (GRID_SIZE / 2);
-          const targetY = (Math.floor(node.y / GRID_SIZE) * GRID_SIZE) + (GRID_SIZE / 2);
-          nvx += (targetX - node.x) * SNAP_STRENGTH; 
-          nvy += (targetY - node.y) * SNAP_STRENGTH;
+          const snapX = Math.round(node.x / GRID_STEP) * GRID_STEP;
+          const snapY = Math.round(node.y / GRID_STEP) * GRID_STEP;
+          nvx += (snapX - node.x) * 0.2; 
+          nvy += (snapY - node.y) * 0.2;
         }
 
         if (node.type === 'media' && node.creatorId) {
@@ -145,26 +132,23 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
           if (creator) {
             const dx = creator.x - node.x;
             const dy = creator.y - node.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const diff = dist - TARGET_EDGE_LENGTH;
-            nvx += (dx / dist) * diff * ATTRACTION;
-            nvy += (dy / dist) * diff * ATTRACTION;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const pull = (dist - TARGET_DIST) * ATTRACTION;
+            nvx += (dx / dist) * pull;
+            nvy += (dy / dist) * pull;
           }
         }
 
-        if (node.type === 'media') {
-          for (let j = 0; j < next.length; j++) {
-            const other = next[j];
-            if (node.id === other.id || other.type !== 'media') continue;
-            const dx = node.x - other.x;
-            const dy = node.y - other.y;
-            const distSq = dx * dx + dy * dy;
-            if (distSq < REPULSION_DIST * REPULSION_DIST && distSq > 1) {
-              const dist = Math.sqrt(distSq);
-              const force = (REPULSION_DIST - dist) / REPULSION_DIST;
-              nvx += (dx / dist) * force * REPULSION_STRENGTH;
-              nvy += (dy / dist) * force * REPULSION_STRENGTH;
-            }
+        for (let j = 0; j < next.length; j++) {
+          if (i === j) continue;
+          const other = next[j];
+          const dx = node.x - other.x;
+          const dy = node.y - other.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < 80 * 80 && distSq > 1) {
+            const dist = Math.sqrt(distSq);
+            nvx += (dx / dist) * REPULSION;
+            nvy += (dy / dist) * REPULSION;
           }
         }
 
@@ -174,7 +158,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
       return next;
     });
     requestRef.current = requestAnimationFrame(updateLoop);
-  }, []);
+  }, [FRICTION, ATTRACTION, REPULSION, TARGET_DIST, GRID_STEP, JITTER_STRENGTH]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(updateLoop);
@@ -185,8 +169,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
     const dx = (e.clientX - lastMousePos.current.x) / zoom;
     const dy = (e.clientY - lastMousePos.current.y) / zoom;
     if (dragTargetId.current) {
-      const tid = dragTargetId.current;
-      setNodes(prev => prev.map(n => n.id === tid ? { ...n, x: n.x + dx, y: n.y + dy, vx: 0, vy: 0 } : n));
+      setNodes(prev => prev.map(n => n.id === dragTargetId.current ? { ...n, x: n.x + dx, y: n.y + dy, vx: 0, vy: 0 } : n));
     } else if (isPanning) {
       setViewOffset(prev => ({ x: prev.x + dx * zoom, y: prev.y + dy * zoom }));
     }
@@ -194,6 +177,8 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   };
 
   const getIsHighlighted = (node: Node) => {
+    const isSearching = !!searchQuery;
+    if (isSearching) return node.label.toLowerCase().includes(searchQuery.toLowerCase());
     if (!selectedNodeId) return true;
     if (node.id === selectedNodeId) return true;
     if (node.type === 'media' && node.creatorId === selectedNodeId) return true;
@@ -203,55 +188,38 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   };
 
   return (
-    <div ref={containerRef} className="bg-[#050505] border border-white/5 rounded-[40px] p-8 overflow-hidden relative select-none h-full min-h-[700px]">
+    <div ref={containerRef} className="bg-[#050505] border border-white/5 rounded-[40px] overflow-hidden relative select-none h-full min-h-[700px]">
       
-      <div className="flex justify-between items-center mb-8 z-10 relative">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-sky-500/10 rounded-lg"><Activity size={16} className="text-sky-500" /></div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-white/80">Active Projection Map</h2>
-        </div>
-        <div className="flex bg-black/50 backdrop-blur-md border border-white/10 rounded-2xl p-1 gap-1">
-          <button onClick={() => setZoom(z => Math.min(z * 1.2, 3))} className="p-2 text-white/40 hover:text-white"><ZoomIn size={14}/></button>
-          <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.05))} className="p-2 text-white/40 hover:text-white"><ZoomOut size={14}/></button>
-          <button onClick={() => {setZoom(0.6); setViewOffset({x:0,y:0}); setSelectedNodeId(null)}} className="p-2 text-white/40 hover:text-sky-400"><Maximize2 size={14}/></button>
-        </div>
+      {/* HUD CONTROLS */}
+      <div className="absolute bottom-10 right-10 z-20 flex flex-col gap-2">
+        <button onClick={() => setZoom(z => Math.min(z * 1.2, 3))} className="p-4 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl text-white/50 hover:text-white transition-all"><ZoomIn size={20}/></button>
+        <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.05))} className="p-4 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl text-white/50 hover:text-white transition-all"><ZoomOut size={20}/></button>
+        <button onClick={() => {setZoom(0.8); setViewOffset({x:0,y:0}); setSelectedNodeId(null)}} className="p-4 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl text-white/50 hover:text-sky-400 transition-all"><Maximize2 size={20}/></button>
       </div>
 
       <div className="relative w-full h-full min-h-[500px] cursor-grab active:cursor-grabbing">
-        <svg 
-          ref={svgRef}
-          width="100%" height="100%" 
-          onMouseMove={handleMouseMove}
+        <svg ref={svgRef} width="100%" height="100%" onMouseMove={handleMouseMove}
           onMouseDown={(e) => { lastMousePos.current = { x: e.clientX, y: e.clientY }; setIsPanning(true); }}
           onMouseUp={() => { dragTargetId.current = null; setIsPanning(false); }}
           onMouseLeave={() => { dragTargetId.current = null; setIsPanning(false); }}
-          onClick={(e) => { if (e.target === svgRef.current) setSelectedNodeId(null); }}
         >
           <defs>
-            <pattern id="smallGrid" width={100} height={100} patternUnits="userSpaceOnUse">
-              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeOpacity="0.08" strokeWidth="0.5" />
+            <pattern id="minorGrid" width={50} height={50} patternUnits="userSpaceOnUse">
+              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="white" strokeOpacity="0.06" strokeWidth="0.5" />
             </pattern>
-            <pattern id="grid" width={500} height={500} patternUnits="userSpaceOnUse">
-              <rect width="500" height="500" fill="url(#smallGrid)" />
-              <path d="M 500 0 L 0 0 0 500" fill="none" stroke="white" strokeOpacity="0.15" strokeWidth="1" />
+            <pattern id="grid" width={250} height={250} patternUnits="userSpaceOnUse">
+              <rect width="250" height="250" fill="url(#minorGrid)" />
+              <path d="M 250 0 L 0 0 0 250" fill="none" stroke="white" strokeOpacity="0.15" strokeWidth="1" />
             </pattern>
-
             {nodes.map(node => node.poster && (
               <pattern key={`pattern-${node.id}`} id={`img-${node.id}`} patternUnits="objectBoundingBox" width="1" height="1">
-                <image href={node.poster} width="72" height="72" preserveAspectRatio="xMidYMid slice" />
+                <image href={node.poster} width="70" height="70" preserveAspectRatio="xMidYMid slice" />
               </pattern>
             ))}
           </defs>
 
-          {/* GRID RENDER */}
-          <rect 
-            width="2000%" height="2000%" 
-            x="-1000%" y="-1000%" 
-            fill="url(#grid)" 
-            style={{ 
-              transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, 
-              transformOrigin: '0 0' 
-            }} 
+          <rect width="1000%" height="1000%" x="-500%" y="-500%" fill="url(#grid)" 
+            style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }} 
           />
 
           <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
@@ -259,46 +227,25 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
               const s = nodes.find(n => n.id === link.source);
               const t = nodes.find(n => n.id === link.target);
               if (!s || !t) return null;
-              
-              const isSearching = !!searchQuery;
-              const isMatch = isSearching && (s.label.toLowerCase().includes(searchQuery.toLowerCase()) || t.label.toLowerCase().includes(searchQuery.toLowerCase()));
-              const isChildOfSelectedCreator = selectedNodeId === s.id || selectedNodeId === t.id;
-              const isActive = isMatch || isChildOfSelectedCreator;
-
-              return (
-                <line 
-                  key={idx} 
-                  x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
-                  stroke={isActive ? "#0EA5E9" : "#FFFFFF"} 
-                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.12} 
-                  strokeWidth={isActive ? 3 : 1} 
-                />
-              );
+              const isActive = (selectedNodeId === s.id || selectedNodeId === t.id) || (searchQuery && (s.label.toLowerCase().includes(searchQuery.toLowerCase()) || t.label.toLowerCase().includes(searchQuery.toLowerCase())));
+              return <line key={idx} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={isActive ? "#0EA5E9" : "#FFFFFF"} strokeOpacity={isActive ? 0.8 : 0.1} strokeWidth={isActive ? 2 : 1} />;
             })}
 
             {nodes.map((node) => {
-              const isMatch = searchQuery && node.label.toLowerCase().includes(searchQuery.toLowerCase());
-              const isHighlighted = getIsHighlighted(node) || isMatch;
-
+              const isHighlighted = getIsHighlighted(node);
+              const isSearchMatch = searchQuery && node.label.toLowerCase().includes(searchQuery.toLowerCase());
               return (
-                <g 
-                  key={node.id} 
-                  onMouseDown={(e) => { e.stopPropagation(); dragTargetId.current = node.id; setSelectedNodeId(node.id); }} 
-                  style={{ opacity: isHighlighted ? 1 : 0.1, transition: 'opacity 0.4s' }}
-                >
+                <g key={node.id} onMouseDown={(e) => { e.stopPropagation(); dragTargetId.current = node.id; setSelectedNodeId(node.id); }} style={{ opacity: isHighlighted ? 1 : 0.1, transition: 'opacity 0.4s' }}>
                   {node.type === 'creator' ? (
                     <>
-                      {/* STATIC CENTER INDICATOR */}
-                      <circle r="60" cx={node.x} cy={node.y} fill="none" stroke="#0EA5E9" strokeOpacity="0.2" strokeWidth="1" strokeDasharray="4 4" />
-                      <circle r="56" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff25"} strokeWidth="2.5" />
-                      <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[11px] font-black uppercase tracking-tighter pointer-events-none italic">
-                        {node.label}
-                      </text>
+                      <circle r="4" cx={node.x} cy={node.y} fill="#0EA5E9" opacity="0.4" />
+                      <circle r="45" cx={node.x} cy={node.y} fill="#000" stroke={isSearchMatch || selectedNodeId === node.id ? "#0EA5E9" : "#ffffff30"} strokeWidth="2" />
+                      <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[8px] font-black uppercase tracking-tighter italic pointer-events-none">{node.label}</text>
                     </>
                   ) : (
                     <>
-                      <circle r="38" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff15"} strokeWidth="2" />
-                      <circle r="36" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
+                      <circle r="35" cx={node.x} cy={node.y} fill="black" stroke={isSearchMatch || selectedNodeId === node.id ? "#0EA5E9" : "#ffffff15"} strokeWidth="2" />
+                      <circle r="33" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
                     </>
                   )}
                 </g>
