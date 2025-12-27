@@ -1,11 +1,8 @@
 "use client";
 
 import { useMediaStore } from "@/store/mediaStore";
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { 
-  RefreshCw, Maximize2, Search, Database, 
-  X, ExternalLink, Cpu, Terminal, Eye, EyeOff, ZoomIn, ZoomOut
-} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Activity, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 
 interface Node {
   id: string;
@@ -14,307 +11,283 @@ interface Node {
   poster?: string;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  vx: number; 
+  vy: number; 
   creatorId?: string;
-  isMatch?: boolean;
-  isFixed?: boolean;
-  isStatic?: boolean;
 }
 
 interface Link {
-  sourceId: string;
-  targetId: string;
+  source: string;
+  target: string;
 }
 
-export function RelationshipGraph() {
+export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNodeId }: any) {
   const { media } = useMediaStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   
-  // Navigation State
-  const [zoom, setZoom] = useState(0.4); // Start zoomed out for large datasets
+  const [zoom, setZoom] = useState(0.8); 
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const [isIsolated, setIsIsolated] = useState(false);
 
   const dragTargetId = useRef<string | null>(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
   const requestRef = useRef<number>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const timeRef = useRef(0);
 
-  // Large Dataset Constants
-  const WIDTH = 3000; // Expanded workspace for 600 nodes
-  const HEIGHT = 2000;
-  const FRICTION = 0.75; 
-  const REPULSION = 1200; 
-  const ATTRACTION = 0.015;
-  const GRID_SIZE = 100; 
+  // --- ADJUSTED PHYSICS FOR STATIC FEEL ---
+  const FRICTION_MOVING = 0.88;   
+  const FRICTION_STATIC = 0.70;   // Much heavier friction when settled
+  const ATTRACTION = 0.007;       
+  const REPULSION_DIST = 190;     
+  const REPULSION_STRENGTH = 0.4; 
+  const GRID_SIZE = 450;
+  const JITTER_SPEED = 0.04;      
+  const JITTER_STRENGTH = 0.12;   
 
   const initializeGraph = useCallback(() => {
     if (!media.length) return;
     const initNodes: Node[] = [];
     const initLinks: Link[] = [];
-    const creators: Record<string, string[]> = {};
+    const creators: Record<string, any[]> = {};
 
     media.forEach(m => {
-      const c = m.creator || "Unknown";
-      if (!creators[c]) creators[c] = [];
-      creators[c].push(m.id);
+      const cName = m.creator || "Unknown";
+      if (!creators[cName]) creators[cName] = [];
+      creators[cName].push(m);
     });
 
-    const creatorEntries = Object.entries(creators);
-    creatorEntries.forEach(([c, items], idx) => {
-      const cId = `creator-${c}`;
-      // Spread creators across a much wider area
-      const centerX = (WIDTH / (creatorEntries.length + 1)) * (idx + 1);
-      const centerY = HEIGHT / 2;
+    Object.entries(creators).forEach(([name, items], idx) => {
+      const cId = `creator-${name.replace(/\s+/g, '-').toLowerCase()}`;
+      const cx = 500 + (idx * 800); 
+      const cy = 500;
 
-      initNodes.push({ 
-        id: cId, label: c, type: 'creator', 
-        x: centerX, y: centerY, 
-        vx: 0, vy: 0, isFixed: false, isStatic: true 
-      });
-
-      items.forEach(id => {
-        const item = media.find(m => m.id === id);
+      initNodes.push({ id: cId, label: name, type: 'creator', x: cx, y: cy, vx: 0, vy: 0 });
+      items.forEach((item, iIdx) => {
+        const angle = (iIdx / items.length) * Math.PI * 2;
         initNodes.push({ 
-          id, label: item?.title || "", type: 'media', poster: item?.poster, 
-          creatorId: cId,
-          x: centerX + (Math.random() - 0.5) * 600, 
-          y: centerY + (Math.random() - 0.5) * 600, 
-          vx: 0, vy: 0, isFixed: false, isStatic: false
+          id: item.id, label: item.title, type: 'media', poster: item.poster, 
+          creatorId: cId, 
+          x: cx + Math.cos(angle) * 160, 
+          y: cy + Math.sin(angle) * 160,
+          vx: 0, vy: 0
         });
-        initLinks.push({ sourceId: cId, targetId: id });
+        initLinks.push({ source: cId, target: item.id });
       });
     });
     setNodes(initNodes);
     setLinks(initLinks);
-    setViewOffset({ x: 0, y: 0 });
   }, [media]);
 
   useEffect(() => { initializeGraph(); }, [initializeGraph]);
 
-  // Handle Wheel Zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomSpeed = 0.001;
-    const delta = -e.deltaY;
-    const newZoom = Math.min(Math.max(zoom + delta * zoomSpeed, 0.1), 3);
-    setZoom(newZoom);
-  };
+  // Search Logic
+  useEffect(() => {
+    if (!searchQuery || nodes.length === 0) return;
+    const match = nodes.find(n => n.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (match && containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      setViewOffset({
+        x: (width / 2) - (match.x * zoom),
+        y: (height / 2) - (match.y * zoom)
+      });
+      setSelectedNodeId(match.id);
+    }
+  }, [searchQuery, zoom]);
 
-  const updatePhysics = () => {
-    setNodes(prev => {
-      const next = prev.map(n => ({ ...n }));
-      // Optimization: Only run physics on non-static nodes
-      const activeNodes = next.filter(n => !n.isStatic && !n.isFixed);
-      
+  // Scroll Zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(prev => Math.min(Math.max(prev * delta, 0.1), 3));
+    };
+    const container = containerRef.current;
+    if (container) container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container?.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  const updateLoop = useCallback(() => {
+    timeRef.current += JITTER_SPEED;
+
+    setNodes(prevNodes => {
+      const next = prevNodes.map(n => ({ ...n }));
       for (let i = 0; i < next.length; i++) {
-        for (let j = i + 1; j < next.length; j++) {
-          const dx = next[i].x - next[j].x;
-          const dy = next[i].y - next[j].y;
-          const distSq = dx * dx + dy * dy + 1;
-          if (distSq > 100000) continue; // Skip distant nodes for 600+ node perf
-          
-          const force = REPULSION / distSq;
-          if (!next[i].isStatic && !next[i].isFixed) {
-            next[i].vx += (dx / Math.sqrt(distSq)) * force;
-            next[i].vy += (dy / Math.sqrt(distSq)) * force;
-          }
-          if (!next[j].isStatic && !next[j].isFixed) {
-            next[j].vx -= (dx / Math.sqrt(distSq)) * force;
-            next[j].vy -= (dy / Math.sqrt(distSq)) * force;
+        const node = next[i];
+        if (node.id === dragTargetId.current) continue;
+
+        // Apply friction based on whether it's currently being dragged or global state
+        let nvx = node.vx * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
+        let nvy = node.vy * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
+
+        // Organic Shake
+        nvx += Math.cos(timeRef.current + i) * JITTER_STRENGTH;
+        nvy += Math.sin(timeRef.current * 0.8 + i) * JITTER_STRENGTH;
+
+        if (node.type === 'creator') {
+          const targetX = Math.round(node.x / GRID_SIZE) * GRID_SIZE;
+          const targetY = Math.round(node.y / GRID_SIZE) * GRID_SIZE;
+          nvx += (targetX - node.x) * 0.1; // Stronger snap back
+          nvy += (targetY - node.y) * 0.1;
+        }
+
+        if (node.type === 'media' && node.creatorId) {
+          const creator = next.find(n => n.id === node.creatorId);
+          if (creator) {
+            const dx = creator.x - node.x;
+            const dy = creator.y - node.y;
+            nvx += dx * ATTRACTION;
+            nvy += dy * ATTRACTION;
           }
         }
+
+        if (node.type === 'media') {
+          for (let j = 0; j < next.length; j++) {
+            const other = next[j];
+            if (node.id === other.id || other.type !== 'media') continue;
+            const dx = node.x - other.x;
+            const dy = node.y - other.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < REPULSION_DIST * REPULSION_DIST && distSq > 1) {
+              const dist = Math.sqrt(distSq);
+              const force = (REPULSION_DIST - dist) / REPULSION_DIST;
+              nvx += (dx / dist) * force * REPULSION_STRENGTH;
+              nvy += (dy / dist) * force * REPULSION_STRENGTH;
+            }
+          }
+        }
+
+        node.vx = nvx; node.vy = nvy;
+        node.x += nvx; node.y += nvy;
       }
-
-      links.forEach(l => {
-        const s = next.find(n => n.id === l.sourceId);
-        const t = next.find(n => n.id === l.targetId);
-        if (s && t) {
-          const dx = t.x - s.x;
-          const dy = t.y - s.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (dist - 180) * ATTRACTION;
-          if (!s.isStatic && !s.isFixed) { s.vx += (dx / dist) * force; s.vy += (dy / dist) * force; }
-          if (!t.isStatic && !t.isFixed) { t.vx -= (dx / dist) * force; t.vy -= (dy / dist) * force; }
-        }
-      });
-
-      return next.map(n => {
-        if (n.isStatic || n.isFixed) return n;
-        n.vx *= FRICTION; n.vy *= FRICTION;
-        n.x = Math.max(100, Math.min(WIDTH - 100, n.x + n.vx));
-        n.y = Math.max(100, Math.min(HEIGHT - 100, n.y + n.vy));
-        return n;
-      });
+      return next;
     });
-    requestRef.current = requestAnimationFrame(updatePhysics);
-  };
+    requestRef.current = requestAnimationFrame(updateLoop);
+  }, []);
 
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(updatePhysics);
-    return () => cancelAnimationFrame(requestRef.current!);
-  }, [links]);
+    requestRef.current = requestAnimationFrame(updateLoop);
+    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
+  }, [updateLoop]);
 
-  const onMouseDown = (e: React.MouseEvent, id?: string) => {
-    if (id) {
-      dragTargetId.current = id;
-      setSelectedNodeId(id);
-      setNodes(prev => prev.map(n => n.id === id ? { ...n, isFixed: true, vx: 0, vy: 0 } : n));
-    } else {
-      setIsPanning(true);
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
-    }
-  };
-
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (dragTargetId.current && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left - viewOffset.x) / zoom;
-      const y = (e.clientY - rect.top - viewOffset.y) / zoom;
-      setNodes(prev => prev.map(n => n.id === dragTargetId.current ? { ...n, x, y } : n));
-    } else if (isPanning) {
-      const dx = e.clientX - lastMousePos.current.x;
-      const dy = e.clientY - lastMousePos.current.y;
-      setViewOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
-    }
-  };
-
-  const onMouseUp = () => {
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const dx = (e.clientX - lastMousePos.current.x) / zoom;
+    const dy = (e.clientY - lastMousePos.current.y) / zoom;
     if (dragTargetId.current) {
-      const id = dragTargetId.current;
-      setNodes(prev => prev.map(n => {
-        if (n.id === id) {
-          const snappedX = Math.round(n.x / GRID_SIZE) * GRID_SIZE;
-          const snappedY = Math.round(n.y / GRID_SIZE) * GRID_SIZE;
-          return { ...n, x: snappedX, y: snappedY, isFixed: false, isStatic: n.type === 'creator', vx: 0, vy: 0 };
-        }
-        return n;
-      }));
-      dragTargetId.current = null;
+      const tid = dragTargetId.current;
+      setNodes(prev => prev.map(n => n.id === tid ? { ...n, x: n.x + dx, y: n.y + dy, vx: 0, vy: 0 } : n));
+    } else if (isPanning) {
+      setViewOffset(prev => ({ x: prev.x + dx * zoom, y: prev.y + dy * zoom }));
     }
-    setIsPanning(false);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 
-  const processedNodes = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return nodes.map(n => ({ ...n, isMatch: true }));
-    const matches = nodes.map(n => ({ ...n, isMatch: n.label.toLowerCase().includes(q) }));
-    const creatorMatch = matches.find(n => n.type === 'creator' && n.isMatch);
-    if (creatorMatch) {
-      return matches.map(n => n.creatorId === creatorMatch.id ? { ...n, isMatch: true } : n);
-    }
-    return matches;
-  }, [nodes, searchQuery]);
-
-  const detailedData = useMemo(() => media.find(m => m.id === selectedNodeId), [media, selectedNodeId]);
+  // Helper to check if a node should be highlighted based on selection
+  const getIsHighlighted = (node: Node) => {
+    if (!selectedNodeId) return true;
+    if (node.id === selectedNodeId) return true;
+    if (node.type === 'media' && node.creatorId === selectedNodeId) return true;
+    // If a media node is selected, highlight its creator parent
+    const selectedNode = nodes.find(n => n.id === selectedNodeId);
+    if (selectedNode?.type === 'media' && node.id === selectedNode.creatorId) return true;
+    return false;
+  };
 
   return (
-    <div className="bg-[#050505] border border-[#1A1A1A] rounded-[40px] p-8 flex flex-col h-[900px] font-mono text-white relative overflow-hidden select-none shadow-2xl">
+    <div ref={containerRef} className="bg-[#050505] border border-white/5 rounded-[40px] p-8 overflow-hidden relative select-none h-full min-h-[700px]">
       
-      {/* HUD HEADER */}
-      <div className="flex justify-between items-center mb-6 z-30 relative gap-8">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 border border-[#222] flex items-center justify-center rounded-xl bg-black">
-            <Cpu size={18} className="text-sky-500" />
-          </div>
-          <div className="hidden md:block">
-            <h2 className="text-[11px] font-black uppercase tracking-[0.5em] italic">Neural Map v2.0</h2>
-            <p className="text-[7px] font-bold text-sky-500/60 uppercase tracking-[0.3em] mt-1.5">Nodes: {nodes.length} // Zoom: {Math.round(zoom * 100)}%</p>
-          </div>
+      <div className="flex justify-between items-center mb-8 z-10 relative">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-sky-500/10 rounded-lg"><Activity size={16} className="text-sky-500" /></div>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-white/80">Active Projection Map</h2>
         </div>
-
-        <div className="flex-1 max-w-md relative">
-          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#333]" />
-          <input 
-            type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="SEARCH_600_RECORDS..."
-            className="w-full bg-black/40 border border-[#1A1A1A] rounded-2xl py-3 pl-12 text-[10px] font-black tracking-widest uppercase focus:border-sky-500/50 outline-none"
-          />
-        </div>
-
-        <div className="flex bg-black/80 border border-[#1A1A1A] rounded-2xl p-1.5 gap-2">
-          <button onClick={() => setZoom(prev => Math.min(prev + 0.2, 3))} className="p-2 text-[#444] hover:text-sky-500"><ZoomIn size={14}/></button>
-          <button onClick={() => setZoom(prev => Math.max(prev - 0.2, 0.1))} className="p-2 text-[#444] hover:text-sky-500"><ZoomOut size={14}/></button>
-          <button onClick={() => { setZoom(0.3); setViewOffset({x:0, y:0}); }} className="p-2 text-[#444] hover:text-sky-500 border-l border-[#222] ml-1"><Maximize2 size={14} /></button>
+        <div className="flex bg-black/50 backdrop-blur-md border border-white/10 rounded-2xl p-1 gap-1">
+          <button onClick={() => setZoom(z => Math.min(z * 1.2, 3))} className="p-2 text-white/40 hover:text-white"><ZoomIn size={14}/></button>
+          <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.1))} className="p-2 text-white/40 hover:text-white"><ZoomOut size={14}/></button>
+          <button onClick={() => {setZoom(0.8); setViewOffset({x:0,y:0}); setSelectedNodeId(null)}} className="p-2 text-white/40 hover:text-sky-400"><Maximize2 size={14}/></button>
         </div>
       </div>
 
-      <div 
-        ref={containerRef}
-        onWheel={handleWheel}
-        onMouseDown={(e) => onMouseDown(e)}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-        className={`relative flex-1 bg-[#010101] rounded-[32px] border border-[#111] overflow-hidden ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-      >
-        <svg width="100%" height="100%" className="absolute inset-0">
-          <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }} className="transition-transform duration-75 ease-out">
-            <defs>
-              <pattern id="grid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
-                <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#fff" strokeOpacity="0.03" strokeWidth="1"/>
+      <div className="relative w-full h-full min-h-[500px] cursor-grab active:cursor-grabbing">
+        <svg 
+          ref={svgRef}
+          width="100%" height="100%" 
+          onMouseMove={handleMouseMove}
+          onMouseDown={(e) => { 
+            lastMousePos.current = { x: e.clientX, y: e.clientY }; 
+            setIsPanning(true); 
+          }}
+          onMouseUp={() => { dragTargetId.current = null; setIsPanning(false); }}
+          onMouseLeave={() => { dragTargetId.current = null; setIsPanning(false); }}
+          onClick={(e) => { if (e.target === svgRef.current) setSelectedNodeId(null); }}
+        >
+          <defs>
+            {nodes.map(node => node.poster && (
+              <pattern key={`pattern-${node.id}`} id={`img-${node.id}`} patternUnits="objectBoundingBox" width="1" height="1">
+                <image href={node.poster} width="68" height="68" preserveAspectRatio="xMidYMid slice" />
               </pattern>
-            </defs>
-            <rect width={WIDTH} height={HEIGHT} fill="url(#grid)" />
+            ))}
+          </defs>
 
-            {links.map((link, i) => {
-              const s = nodes.find(n => n.id === link.sourceId);
-              const t = nodes.find(n => n.id === link.targetId);
+          <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+            {links.map((link, idx) => {
+              const s = nodes.find(n => n.id === link.source);
+              const t = nodes.find(n => n.id === link.target);
               if (!s || !t) return null;
-              const isMatch = (searchQuery && (s.isMatch || t.isMatch)) || (!searchQuery && (selectedNodeId === s.id || selectedNodeId === t.id));
+              
+              const isSearching = !!searchQuery;
+              const isMatch = isSearching && (s.label.toLowerCase().includes(searchQuery.toLowerCase()) || t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+              const isChildOfSelectedCreator = selectedNodeId === s.id || selectedNodeId === t.id;
+              const isActive = isMatch || isChildOfSelectedCreator;
+
               return (
-                <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
-                  stroke={isMatch ? "#0EA5E9" : "#1A1A1A"} 
-                  strokeOpacity={isMatch ? 0.6 : 0.1} strokeWidth={isMatch ? 3 : 1} />
+                <line 
+                  key={idx} 
+                  x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
+                  stroke={isActive ? "#0EA5E9" : "#FFFFFF"} 
+                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.15} 
+                  strokeWidth={isActive ? 3 : 1} 
+                />
               );
             })}
 
-            {processedNodes.map(node => {
-              const highlight = selectedNodeId === node.id || (searchQuery && node.isMatch);
-              const opacity = node.isMatch ? 1 : 0.05;
-              const r = node.type === 'creator' ? 60 : 35;
+            {nodes.map((node) => {
+              const isMatch = searchQuery && node.label.toLowerCase().includes(searchQuery.toLowerCase());
+              const isHighlighted = getIsHighlighted(node) || isMatch;
 
               return (
-                <g key={node.id} onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e, node.id); }} style={{ opacity }} className="transition-opacity duration-500">
+                <g 
+                  key={node.id} 
+                  onMouseDown={(e) => { 
+                    e.stopPropagation(); 
+                    dragTargetId.current = node.id; 
+                    setSelectedNodeId(node.id); 
+                  }} 
+                  style={{ 
+                    opacity: isHighlighted ? 1 : 0.15,
+                    transition: 'opacity 0.4s ease, transform 0.2s ease'
+                  }}
+                >
                   {node.type === 'creator' ? (
-                    <g>
-                      <circle r={r} cx={node.x} cy={node.y} fill="#000" stroke={highlight ? "#0EA5E9" : "#333"} strokeWidth="2" />
-                      <text x={node.x} y={node.y + 5} textAnchor="middle" fill={highlight ? "#fff" : "#666"} className="text-[12px] font-black uppercase italic tracking-tighter">{node.label}</text>
-                    </g>
+                    <>
+                      <circle r="52" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff25"} strokeWidth="2.5" />
+                      <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[10px] font-black uppercase tracking-tighter pointer-events-none italic">
+                        {node.label.length > 12 ? node.label.substring(0, 10) + '..' : node.label}
+                      </text>
+                    </>
                   ) : (
-                    <g>
-                      <defs><clipPath id={`c-${node.id}`}><circle r={r-2} cx={node.x} cy={node.y} /></clipPath></defs>
-                      <circle r={r+3} cx={node.x} cy={node.y} fill="#111" stroke={highlight ? "#0EA5E9" : "transparent"} strokeWidth="4" />
-                      <image href={node.poster} x={node.x-r} y={node.y-r} height={r*2} width={r*2} clipPath={`url(#c-${node.id})`} preserveAspectRatio="xMidYMid slice" />
-                    </g>
+                    <>
+                      <circle r="36" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff15"} strokeWidth="2" />
+                      <circle r="34" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
+                    </>
                   )}
                 </g>
               );
             })}
           </g>
         </svg>
-
-        {/* SIDEBAR */}
-        <div className={`absolute top-0 right-0 h-full w-80 bg-black/90 border-l border-white/5 backdrop-blur-xl z-50 transition-transform duration-500 ${detailedData ? 'translate-x-0' : 'translate-x-full'}`}>
-          {detailedData && (
-            <div className="p-8 flex flex-col h-full overflow-y-auto">
-              <button onClick={() => setSelectedNodeId(null)} className="ml-auto text-white/20 hover:text-white"><X size={20}/></button>
-              <h3 className="text-xl font-black text-white uppercase mt-4 leading-tight">{detailedData.title}</h3>
-              <img src={detailedData.poster} className="w-full rounded-xl my-6 border border-white/10" alt="" />
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-white/5 p-3 rounded-lg text-center"><p className="text-sky-500 text-lg font-black">{detailedData.rating}.0</p></div>
-                <div className="bg-white/5 p-3 rounded-lg text-center"><p className="text-[9px] uppercase font-bold">{detailedData.type}</p></div>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
