@@ -1,8 +1,12 @@
 "use client";
 
-import { Media, MediaStatus } from "@/types";
-import { useMediaStore } from "@/store/mediaStore";
-import { X, Calendar, User, Star, Settings2, Play, CheckCircle2, Clock } from "lucide-react";
+import { useState } from 'react';
+import { Media, MediaStatus } from '@/types';
+import { useMediaStore } from '@/store/mediaStore';
+import { 
+  X, Star, Play, BookOpen, Tag, ExternalLink, 
+  Search, Youtube, Globe, Settings2, Calendar, User, Clock 
+} from 'lucide-react';
 
 interface Props {
   item: Media;
@@ -11,22 +15,32 @@ interface Props {
 }
 
 export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
+  const [showSources, setShowSources] = useState(false);
   const updateMedia = useMediaStore((state) => state.updateMedia);
 
   const formatStatus = (status: MediaStatus | string) => {
     return status.replace(/_/g, ' ');
   };
 
-  const handleQuickContinue = () => {
-    const isFinished = item.total > 0 && item.progress + 1 >= item.total;
-    
-    updateMedia(item.id, {
-      progress: item.total > 0 ? Math.min(item.progress + 1, item.total) : item.progress + 1,
-      status: isFinished ? 'completed' : item.status
-    });
-  };
-
-  const isReading = item.type === 'manga' || item.type === 'book';
+  const sources = [
+    { 
+      name: 'Google Search', 
+      icon: <Search size={18} />, 
+      url: `https://www.google.com/search?q=watch+${encodeURIComponent(item.title)}` 
+    },
+    { 
+      name: 'YouTube', 
+      icon: <Youtube size={18} />, 
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}+trailer` 
+    },
+    { 
+      name: item.type === 'manga' ? 'MangaDex' : 'AnimeKai', 
+      icon: <Globe size={18} />, 
+      url: item.type === 'manga' 
+        ? `https://mangadex.org/search?q=${encodeURIComponent(item.title)}` 
+        : `https://animekai.to/browser?keyword=${encodeURIComponent(item.title)}` 
+    },
+  ];
 
   return (
     <div 
@@ -34,77 +48,119 @@ export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
       onClick={onClose}
     >
       <div 
-        className="bg-neutral-950 border border-neutral-900 w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-[48px] flex flex-col md:flex-row shadow-2xl"
+        className="bg-[#050505] w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[48px] flex flex-col md:flex-row shadow-2xl border border-neutral-900 animate-in fade-in zoom-in duration-300"
         onClick={e => e.stopPropagation()}
       >
         {/* Left Side: Poster */}
-        <div className="w-full md:w-[45%] h-[40vh] md:h-auto relative">
-          <img src={item.poster} className="w-full h-full object-cover" alt={item.title} />
-          <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-neutral-950 via-transparent to-transparent" />
+        <div className="w-full md:w-[40%] h-72 md:h-auto relative shrink-0">
+          <img 
+            src={item.poster || '/placeholder.png'} 
+            className="w-full h-full object-cover" 
+            alt={item.title} 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#050505] via-transparent to-transparent" />
         </div>
 
         {/* Right Side: Content */}
-        <div className="flex-1 p-8 md:p-14 overflow-y-auto custom-scrollbar flex flex-col">
-          <div className="flex justify-between items-start mb-10">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-500">{item.type}</span>
-                <span className="w-1 h-1 rounded-full bg-neutral-800" />
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-600">
-                  {formatStatus(item.status)}
-                </span>
+        <div className="flex-1 p-8 md:p-12 overflow-y-auto custom-scrollbar flex flex-col">
+          {!showSources ? (
+            <>
+              {/* Main Info View */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-500">{item.type}</span>
+                    <span className="w-1 h-1 rounded-full bg-neutral-800" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-600">
+                      {formatStatus(item.status)}
+                    </span>
+                  </div>
+                  <h2 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
+                    {item.title}
+                  </h2>
+                </div>
+                <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
               </div>
-              <h2 className="text-4xl font-black tracking-tighter uppercase italic text-white leading-none">
-                {item.title}
-              </h2>
-            </div>
-            <button onClick={onClose} className="p-3 bg-neutral-900 rounded-full text-neutral-500 hover:text-white transition-all">
-              <X size={20} />
-            </button>
-          </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-            <div className="p-5 bg-neutral-900/40 rounded-[24px] border border-neutral-900">
-              <Star className="text-yellow-500 mb-1" size={14} />
-              <p className="text-[10px] font-black text-white">{item.rating?.toFixed(1) || "0.0"}</p>
-            </div>
-            <div className="p-5 bg-neutral-900/40 rounded-[24px] border border-neutral-900">
-              <Calendar className="text-sky-500 mb-1" size={14} />
-              <p className="text-[10px] font-black text-white">{item.year || "N/A"}</p>
-            </div>
-            <div className="p-5 bg-neutral-900/40 rounded-[24px] border border-neutral-900">
-              <Clock className="text-emerald-500 mb-1" size={14} />
-              <p className="text-[10px] font-black text-white">{item.progress}/{item.total || '?'}</p>
-            </div>
-            <div className="p-5 bg-neutral-900/40 rounded-[24px] border border-neutral-900">
-              <User className="text-purple-500 mb-1" size={14} />
-              <p className="text-[10px] font-black text-white truncate">{item.creator || "Unknown"}</p>
-            </div>
-          </div>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-8">
+                <div className="flex items-center gap-3 bg-neutral-900/50 p-4 rounded-2xl border border-neutral-800">
+                  <Star size={16} className="text-yellow-500 fill-yellow-500" />
+                  <span className="text-sm font-black text-white">{item.rating?.toFixed(1) || "0.0"}</span>
+                </div>
+                <div className="flex items-center gap-3 bg-neutral-900/50 p-4 rounded-2xl border border-neutral-800">
+                  <Clock size={16} className="text-emerald-500" />
+                  <span className="text-sm font-black text-white">{item.progress}/{item.total || '?'}</span>
+                </div>
+              </div>
 
-          <div className="flex-1 space-y-4 mb-10">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-700">Synopsis</h4>
-            <p className="text-neutral-400 text-sm leading-relaxed">{item.synopsis}</p>
-          </div>
+              {/* Synopsis */}
+              <div className="mb-8 flex-1">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-700 mb-3 flex items-center gap-2">
+                  <Tag size={10} /> Synopsis
+                </h3>
+                <p className="text-sm text-neutral-400 leading-relaxed font-medium line-clamp-6">
+                  {item.synopsis || "No description available."}
+                </p>
+              </div>
 
-          {/* ACTION BUTTONS */}
-          <div className="mt-auto pt-8 border-t border-neutral-900 flex gap-4">
-            <button 
-              onClick={onEdit}
-              className="flex-[1] py-5 bg-neutral-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest hover:bg-neutral-800 transition-all flex items-center justify-center gap-3"
-            >
-              <Settings2 size={16} /> Modify
-            </button>
+              {/* Action Footer */}
+              <div className="mt-auto pt-6 border-t border-neutral-900 flex gap-4">
+                <button 
+                  onClick={onEdit} 
+                  className="flex-1 py-4 rounded-[20px] bg-neutral-900 text-white text-[10px] font-black uppercase tracking-widest border border-neutral-800 hover:bg-neutral-800 transition-all flex items-center justify-center gap-2"
+                >
+                  <Settings2 size={16} /> Modify
+                </button>
+                <button 
+                  onClick={() => setShowSources(true)}
+                  className="flex-1 py-4 rounded-[20px] bg-white text-black text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-sky-500 hover:text-white transition-all shadow-xl"
+                >
+                  {item.type === 'manga' ? <BookOpen size={16}/> : <Play size={16}/>} Continue
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Source Selector View */}
+              <div className="flex justify-between items-center mb-8">
+                <div className="space-y-1">
+                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-500">External Links</p>
+                   <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Select Source</h2>
+                </div>
+                <button 
+                  onClick={() => setShowSources(false)} 
+                  className="text-neutral-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] border border-neutral-800 px-4 py-2 rounded-full transition-all"
+                >
+                  Back
+                </button>
+              </div>
 
-            <button 
-              onClick={handleQuickContinue}
-              className="flex-[2] py-5 bg-white text-black rounded-[24px] font-black uppercase text-[10px] tracking-widest hover:bg-sky-500 hover:text-white transition-all flex items-center justify-center gap-3 group shadow-xl"
-            >
-              <Play size={16} className="fill-current" /> 
-              Continue {isReading ? 'Reading' : 'Watching'}
-            </button>
-          </div>
+              <div className="space-y-3 flex-1">
+                {sources.map((source) => (
+                  <a 
+                    key={source.name}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-5 bg-neutral-900/40 border border-neutral-800 rounded-3xl hover:bg-neutral-800/60 hover:border-neutral-700 transition-all group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="text-neutral-500 group-hover:text-white transition-colors">{source.icon}</div>
+                      <span className="text-[11px] font-black text-white uppercase tracking-widest">{source.name}</span>
+                    </div>
+                    <ExternalLink size={14} className="text-neutral-700 group-hover:text-white transition-colors" />
+                  </a>
+                ))}
+              </div>
+              
+              <p className="mt-8 text-[9px] font-bold text-neutral-600 uppercase tracking-widest text-center">
+                Select a platform to continue your journey
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
