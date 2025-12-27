@@ -26,7 +26,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   
-  const [zoom, setZoom] = useState(0.6); // Slightly zoomed out to accommodate longer edges
+  const [zoom, setZoom] = useState(0.6); 
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -37,14 +37,15 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   const svgRef = useRef<SVGSVGElement>(null);
   const timeRef = useRef(0);
 
-  // --- EXTENDED EDGE PHYSICS CONSTANTS ---
+  // --- SYNCED KINETIC PHYSICS ---
   const FRICTION_MOVING = 0.88;   
   const FRICTION_STATIC = 0.72;   
-  const ATTRACTION = 0.004;       // Lowered to let nodes drift further out
-  const TARGET_EDGE_LENGTH = 320; // NEW: The ideal distance from Parent to Child
-  const REPULSION_DIST = 250;     // Increased to give children more personal space
-  const REPULSION_STRENGTH = 0.6; // Pushes harder to maintain the gap
-  const GRID_SIZE = 700;          // Spaced creators further apart to avoid overlap
+  const ATTRACTION = 0.004;       
+  const TARGET_EDGE_LENGTH = 320; 
+  const REPULSION_DIST = 250;     
+  const REPULSION_STRENGTH = 0.6; 
+  const GRID_SIZE = 1000;         // Wider grid for static centering
+  const SNAP_STRENGTH = 0.15;     // Stronger snap to keep creators at center points
   const JITTER_SPEED = 0.04;      
   const JITTER_STRENGTH = 0.12;   
 
@@ -62,14 +63,19 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
 
     Object.entries(creators).forEach(([name, items], idx) => {
       const cId = `creator-${name.replace(/\s+/g, '-').toLowerCase()}`;
-      // Creators start much further apart
-      const cx = 800 + (idx * GRID_SIZE); 
-      const cy = 800;
+      
+      // Calculate a static center point on the grid for each creator
+      const cols = Math.ceil(Math.sqrt(Object.keys(creators).length));
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      
+      const cx = (col * GRID_SIZE) + (GRID_SIZE / 2); 
+      const cy = (row * GRID_SIZE) + (GRID_SIZE / 2);
 
       initNodes.push({ id: cId, label: name, type: 'creator', x: cx, y: cy, vx: 0, vy: 0 });
+      
       items.forEach((item, iIdx) => {
         const angle = (iIdx / items.length) * Math.PI * 2;
-        // Start children at the new extended edge length
         initNodes.push({ 
           id: item.id, label: item.title, type: 'media', poster: item.poster, 
           creatorId: cId, 
@@ -122,14 +128,16 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
         let nvx = node.vx * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
         let nvy = node.vy * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
 
+        // Organic Micro-jitter
         nvx += Math.cos(timeRef.current + i) * JITTER_STRENGTH;
         nvy += Math.sin(timeRef.current * 0.8 + i) * JITTER_STRENGTH;
 
         if (node.type === 'creator') {
-          const targetX = Math.round(node.x / GRID_SIZE) * GRID_SIZE;
-          const targetY = Math.round(node.y / GRID_SIZE) * GRID_SIZE;
-          nvx += (targetX - node.x) * 0.05; 
-          nvy += (targetY - node.y) * 0.05;
+          // LOCK TO GRID CENTER: Finds the nearest 1000x1000 center and pulls hard
+          const targetX = (Math.floor(node.x / GRID_SIZE) * GRID_SIZE) + (GRID_SIZE / 2);
+          const targetY = (Math.floor(node.y / GRID_SIZE) * GRID_SIZE) + (GRID_SIZE / 2);
+          nvx += (targetX - node.x) * SNAP_STRENGTH; 
+          nvy += (targetY - node.y) * SNAP_STRENGTH;
         }
 
         if (node.type === 'media' && node.creatorId) {
@@ -138,8 +146,6 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
             const dx = creator.x - node.x;
             const dy = creator.y - node.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            // Only pull if further than target length, or push if too close
             const diff = dist - TARGET_EDGE_LENGTH;
             nvx += (dx / dist) * diff * ATTRACTION;
             nvy += (dy / dist) * diff * ATTRACTION;
@@ -222,12 +228,31 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
           onClick={(e) => { if (e.target === svgRef.current) setSelectedNodeId(null); }}
         >
           <defs>
+            <pattern id="smallGrid" width={100} height={100} patternUnits="userSpaceOnUse">
+              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeOpacity="0.08" strokeWidth="0.5" />
+            </pattern>
+            <pattern id="grid" width={500} height={500} patternUnits="userSpaceOnUse">
+              <rect width="500" height="500" fill="url(#smallGrid)" />
+              <path d="M 500 0 L 0 0 0 500" fill="none" stroke="white" strokeOpacity="0.15" strokeWidth="1" />
+            </pattern>
+
             {nodes.map(node => node.poster && (
               <pattern key={`pattern-${node.id}`} id={`img-${node.id}`} patternUnits="objectBoundingBox" width="1" height="1">
                 <image href={node.poster} width="72" height="72" preserveAspectRatio="xMidYMid slice" />
               </pattern>
             ))}
           </defs>
+
+          {/* GRID RENDER */}
+          <rect 
+            width="2000%" height="2000%" 
+            x="-1000%" y="-1000%" 
+            fill="url(#grid)" 
+            style={{ 
+              transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, 
+              transformOrigin: '0 0' 
+            }} 
+          />
 
           <g style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
             {links.map((link, idx) => {
@@ -245,7 +270,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
                   key={idx} 
                   x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
                   stroke={isActive ? "#0EA5E9" : "#FFFFFF"} 
-                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.1} 
+                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.12} 
                   strokeWidth={isActive ? 3 : 1} 
                 />
               );
@@ -263,14 +288,16 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
                 >
                   {node.type === 'creator' ? (
                     <>
-                      <circle r="56" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff20"} strokeWidth="2.5" />
+                      {/* STATIC CENTER INDICATOR */}
+                      <circle r="60" cx={node.x} cy={node.y} fill="none" stroke="#0EA5E9" strokeOpacity="0.2" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle r="56" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff25"} strokeWidth="2.5" />
                       <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[11px] font-black uppercase tracking-tighter pointer-events-none italic">
                         {node.label}
                       </text>
                     </>
                   ) : (
                     <>
-                      <circle r="38" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff10"} strokeWidth="2" />
+                      <circle r="38" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff15"} strokeWidth="2" />
                       <circle r="36" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
                     </>
                   )}

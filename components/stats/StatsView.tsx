@@ -4,7 +4,7 @@ import { useMediaStore } from "@/store/mediaStore";
 import { useMemo, useState } from "react";
 import { RelationshipGraph } from "./RelationshipGraph";
 import { SidebarDetail } from "./SidebarDetail";
-import { Search, Cpu, Clock, CheckCircle2, Flame } from "lucide-react";
+import { Search } from "lucide-react";
 
 export function StatsView() {
   const { media } = useMediaStore();
@@ -25,30 +25,21 @@ export function StatsView() {
   return (
     <div className="space-y-6 pb-12 font-mono">
       {/* 1. METRICS HUD */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-[#050505] border border-white/5 p-6 rounded-[24px]">
           <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Total_Nodes</p>
           <h3 className="text-3xl font-black text-white italic">{stats.total}</h3>
         </div>
         <div className="bg-[#050505] border border-white/5 p-6 rounded-[24px]">
           <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Completion_Rate</p>
-          <h3 className="text-3xl font-black text-emerald-500 italic">{stats.rate}%</h3>
+          <h3 className="text-3xl font-black text-sky-500 italic">{stats.rate}%</h3>
         </div>
       </div>
 
-      {/* 2. NEURAL MAP WITH NON-OVERLAPPING CONTROLS */}
-      <div className="relative bg-[#010101] border border-white/10 rounded-[40px] h-[700px] overflow-hidden shadow-2xl">
+      {/* 2. PROJECTION MAP CONTAINER */}
+      <div className="relative bg-[#010101] border border-white/10 rounded-[40px] h-[750px] overflow-hidden shadow-2xl">
         
-        {/* TOP LEFT: TITLE & STATUS */}
-        <div className="absolute top-6 left-6 z-20 flex items-center gap-4 bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/5">
-          <Cpu size={18} className="text-sky-500" />
-          <div className="hidden sm:block">
-            <h2 className="text-[10px] font-black text-white uppercase tracking-widest">Neural_Engine_V2</h2>
-            <p className="text-[7px] text-sky-500/50 uppercase">Sync_Active</p>
-          </div>
-        </div>
-
-        {/* TOP RIGHT: SEARCH BAR (Fixed pointer events) */}
+        {/* TOP RIGHT: SEARCH BAR */}
         <div className="absolute top-6 right-6 z-30 w-64 sm:w-80">
           <div className="relative group">
             <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-sky-500 transition-colors" />
@@ -62,7 +53,7 @@ export function StatsView() {
           </div>
         </div>
 
-        {/* THE GRAPH (Search and Selection props passed) */}
+        {/* THE GRAPH */}
         <div className="absolute inset-0 z-10">
           <RelationshipGraph 
             searchQuery={searchQuery}
