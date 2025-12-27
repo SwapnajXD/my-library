@@ -1,25 +1,35 @@
 export type MediaType = 'anime' | 'manga' | 'movie' | 'tv' | 'book';
 
-// Merged statuses to include 'plan_to_watch'
-export type MediaStatus = 'watching' | 'reading' | 'completed' | 'plan_to_watch' | 'dropped';
+export type MediaStatus = 
+  | 'plan_to_watch' 
+  | 'watching' 
+  | 'reading' 
+  | 'completed' 
+  | 'dropped';
 
 export interface Media {
+  // Core Identifiers
   id: string;
   title: string;
   type: MediaType;
   status: MediaStatus;
-  progress: number;      // Current Page / Episode
-  total?: number;        // Total Pages / Episodes (formerly 'episodes' in your snippet)
   
-  // Metadata
-  creator?: string;      // Author for books / Studio for Anime
-  rating?: number;       // Change to optional if items might not have one yet
-  poster?: string;
-  banner?: string;       // From version 1
-  year?: number;         // From version 2
+  // Progress Tracking
+  progress: number;             
+  total: number; // Default to 0 if unknown
+  
+  // API Specific counters (Optional helpers)
+  episodes?: number;            
+  chapters?: number;            
+  
+  // Visual Metadata
+  poster: string;               
+  banner?: string;              
+  
+  // Rich Metadata
+  creator?: string;             // Author, Director, or Studio
+  year?: string | number;       
+  rating?: number;              // Scaled to 10.0
   synopsis?: string;
   genres?: string[];
-  
-  // UI Helpers
-  mediaTypeBadge?: string;
 }

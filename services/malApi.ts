@@ -1,46 +1,48 @@
-export interface MediaItem {
-  id: string;
-  title: string;
-  authors: string[];
-  cover: string;
-  rating: number;
-  source: 'MAL';
-  year?: number;
-  synopsis?: string;
-  episodes?: number;
-  genres?: string[];
-  type?: string; 
-}
-
-export const searchMal = async (query: string, category: 'anime' | 'manga'): Promise<MediaItem[]> => {
+// We map the raw API data to a shape that the unified services/index.ts can easily "transform"
+export const searchMal = async (query: string, type: 'anime' | 'manga') => {
   if (!query.trim()) return [];
-  const endpoint = category === 'anime' ? 'anime' : 'manga';
-  
+
   try {
     const res = await fetch(
-      `https://api.jikan.moe/v4/${endpoint}?q=${encodeURIComponent(query)}&limit=25`
+      `https://api.jikan.moe/v4/${type}?q=${encodeURIComponent(query)}&limit=15`
     );
-    if (!res.ok) throw new Error(`MAL Error: ${res.status}`);
+    
+    if (!res.ok) throw new Error(`MAL API Error: ${res.status}`);
+    
     const data = await res.json();
     if (!data?.data) return [];
 
     return data.data.map((item: any) => ({
-      id: `MAL-${item.mal_id}`,
-      source: 'MAL' as const,
+      // We keep the ID clean, the index.ts will handle the String conversion
+      id: item.mal_id,
       title: item.title,
-      authors: category === 'anime' 
-        ? item.studios?.map((s: any) => s.name) || []
-        : item.authors?.map((a: any) => a.name) || [],
-      cover: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
-      rating: item.score ? Number(Math.min(item.score, 10).toFixed(1)) : 0,
-      year: item.year || item.aired?.prop?.from?.year || item.published?.prop?.from?.year,
+      
+      // Map 'episodes' or 'chapters' to a common 'total' field
+      total: item.episodes || item.chapters || 0,
+      
+      // Use the high-quality image path
+      poster: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
+      
+      // Score normalization
+      rating: item.score ? Number(item.score.toFixed(1)) : 0,
+      
+      // Robust year extraction
+      year: item.year || 
+            item.aired?.prop?.from?.year || 
+            item.published?.prop?.from?.year || 
+            (item.aired?.from ? new Date(item.aired.from).getFullYear() : null),
+      
       synopsis: item.synopsis,
-      episodes: item.chapters || item.episodes || 0,
-      genres: item.genres?.map((g: any) => g.name) || [],
-      type: item.type 
+      
+      // Map Studio (Anime) or Author (Manga) to 'creator'
+      creator: type === 'anime' 
+        ? item.studios?.[0]?.name || item.producers?.[0]?.name
+        : item.authors?.[0]?.name,
+        
+      genres: item.genres?.map((g: any) => g.name) || []
     }));
   } catch (error) {
-    console.error("MAL API Error:", error);
+    console.error("Failed to fetch from MAL:", error);
     return [];
   }
 };
