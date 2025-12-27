@@ -16,20 +16,22 @@ export interface Media {
   
   // Progress Tracking
   progress: number;             
-  total: number; // Mandatory for progress logic and "Continue" button math
-  
-  // API Specific counters (Optional helpers for data mapping)
-  episodes?: number;            
-  chapters?: number;            
+  total: number; // Mandatory for progress logic
   
   // Visual Metadata
   poster: string;               
   banner?: string;              
   
-  // Rich Metadata
-  creator?: string;             // Author, Director, or Studio
+  // Rich Metadata & Graph Identifiers
+  creator: string;              // Primary node for the Relationship Graph (Studio/Author)
+  studio?: string;              // Specific studio override
+  author?: string;              // Specific author override
   year?: string | number;       
   rating?: number;              // Scaled to 10.0
   synopsis?: string;
-  genres?: string[];
+  genres: string[];             
+  
+  // API Specific counters
+  episodes?: number;            
+  chapters?: number;            
 }
