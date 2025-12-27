@@ -6,21 +6,51 @@ import MediaCard from "@/components/media/MediaCard";
 import MediaModal from "@/components/media/MediaModal";
 import EditMediaModal from "@/components/media/EditMediaModal";
 import AddSearch from "@/components/search/AddSearch";
+import StatsView from "@/components/media/StatsView";
 import { Media } from "@/types";
+import { BarChart3, LayoutGrid } from "lucide-react";
 
 export default function Page() {
   const { media, deleteMedia } = useMediaStore();
   
+  // View state (Grid vs Stats)
+  const [view, setView] = useState<'grid' | 'stats'>('grid');
+  
   // Modal states
   const [viewingItem, setViewingItem] = useState<Media | null>(null);
-  const [isEditing, setIsEditing] = useState(false); // Changed to boolean flag
+  const [isEditing, setIsEditing] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   return (
     <main className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto">
         <header className="flex justify-between items-center mb-12 px-2">
-          <h1 className="text-xl font-black uppercase italic tracking-tighter">Vault</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-black uppercase italic tracking-tighter">Vault</h1>
+            
+            {/* View Switcher Toggle */}
+            <div className="flex bg-neutral-900 p-1 rounded-full border border-neutral-800 ml-4">
+              <button 
+                onClick={() => setView('grid')}
+                className={`p-2 rounded-full transition-all ${
+                  view === 'grid' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setView('stats')}
+                className={`p-2 rounded-full transition-all ${
+                  view === 'stats' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'
+                }`}
+                title="Statistics"
+              >
+                <BarChart3 size={16} />
+              </button>
+            </div>
+          </div>
+
           <button 
             onClick={() => setIsSearchOpen(true)} 
             className="bg-white text-black px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
@@ -29,27 +59,43 @@ export default function Page() {
           </button>
         </header>
 
-        {/* Media Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
-          {media.map((item: Media) => (
-            <MediaCard 
-              key={item.id} 
-              item={item} 
-              onView={(it: Media) => setViewingItem(it)} 
-              onDelete={(it: Media) => deleteMedia(it.id)}
-            />
-          ))}
-        </div>
+        {/* Main Content Area */}
+        {view === 'grid' ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 animate-in fade-in duration-500">
+            {media.map((item: Media) => (
+              <MediaCard 
+                key={item.id} 
+                item={item} 
+                onView={(it: Media) => setViewingItem(it)} 
+                onDelete={(it: Media) => deleteMedia(it.id)}
+              />
+            ))}
+            
+            {media.length === 0 && (
+              <div className="col-span-full py-20 text-center border border-dashed border-neutral-900 rounded-[40px]">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-700">
+                  Your vault is empty
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <StatsView />
+          </div>
+        )}
       </div>
+
+      {/* --- OVERLAYS --- */}
 
       {/* Global Search/Add Modal */}
       <AddSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* Info Tab Modal (The Base Layer) */}
+      {/* Layer 1: Info Tab Modal (Base Layer) */}
       {viewingItem && (
         <MediaModal 
           item={viewingItem} 
-          // If we are editing, Esc shouldn't close the Info Tab
+          // Layered navigation: Don't close details if editor is on top
           onClose={() => {
             if (!isEditing) setViewingItem(null);
           }} 
@@ -57,12 +103,10 @@ export default function Page() {
         />
       )}
 
-      {/* Progress Editor Modal (The Top Layer) */}
+      {/* Layer 2: Progress Editor Modal (Top Layer) */}
       {isEditing && viewingItem && (
         <EditMediaModal 
-          item={viewingItem} 
-          // Closing this just sets isEditing to false, 
-          // revealing the MediaModal underneath
+          itemId={viewingItem.id} // Pass ONLY the id
           onClose={() => setIsEditing(false)} 
         />
       )}

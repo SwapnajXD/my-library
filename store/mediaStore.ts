@@ -16,9 +16,17 @@ export const useMediaStore = create<MediaState>()(
     (set) => ({
       media: [],
       
-      addMedia: (item) => set((state) => ({ 
-        media: [item, ...state.media] 
-      })),
+      addMedia: (item) => set((state) => {
+        // Check if an item with this ID already exists
+        const exists = state.media.some((m) => m.id === item.id);
+        if (exists) {
+          console.warn(`Item with id ${item.id} already exists in Vault.`);
+          return state; // Do nothing if it's a duplicate
+        }
+        return { 
+          media: [item, ...state.media] 
+        };
+      }),
 
       updateMedia: (id, updates) => set((state) => ({
         media: state.media.map((m) => 
