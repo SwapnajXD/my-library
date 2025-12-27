@@ -1,5 +1,5 @@
-import { searchMal } from './malApi';
-import { searchTmdb } from './tmdbApi';
+import { malApi } from './malApi';
+import { tmdbApi } from './tmdbApi';
 import { Media, MediaType } from '@/types';
 
 const FALLBACK_POSTER = "https://via.placeholder.com/400x600?text=No+Cover";
@@ -7,7 +7,7 @@ const FALLBACK_POSTER = "https://via.placeholder.com/400x600?text=No+Cover";
 export const searchMedia = async (query: string, type: MediaType): Promise<Media[]> => {
   if (!query.trim()) return [];
 
-  // The Normalizer: Prefixing IDs ensures that Anime ID 1 doesn't collide with Book ID 1
+  // The Normalizer: Prefixing IDs ensures that Anime ID 1 doesn't collide with Movie ID 1
   const transform = (item: any): Media => {
     let totalCount = 0;
     if (type === 'movie') {
@@ -17,7 +17,7 @@ export const searchMedia = async (query: string, type: MediaType): Promise<Media
     }
 
     return {
-      // FIX: Prefix ID with type to ensure uniqueness across the entire app
+      // Prefix ID with type to ensure uniqueness across the entire app
       id: `${type}-${item.id}`, 
       title: item.title || "Unknown Title",
       type: type,
@@ -30,7 +30,9 @@ export const searchMedia = async (query: string, type: MediaType): Promise<Media
       rating: item.rating || 0,
       synopsis: item.synopsis || "",
       genres: item.genres || [],
-      mediaTypeBadge: type.toUpperCase()
+      // Ensure the sequel/fetch flags pass through the transform
+      sequelId: item.sequelId || null,
+      needsDeepFetch: item.needsDeepFetch || false
     };
   };
 
@@ -38,10 +40,12 @@ export const searchMedia = async (query: string, type: MediaType): Promise<Media
 
   try {
     if (type === 'anime' || type === 'manga') {
-      rawResults = await searchMal(query, type);
+      // FIX: Call via the malApi object
+      rawResults = await malApi.search(query, type);
     } 
     else if (type === 'movie' || type === 'tv') {
-      rawResults = await searchTmdb(query, type);
+      // FIX: Call via the tmdbApi object
+      rawResults = await tmdbApi.search(query, type);
     } 
     else if (type === 'book') {
       const res = await fetch(

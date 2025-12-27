@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { X, Trash2, Download, ShieldAlert, Cpu } from "lucide-react";
+import { BulkMetadataRefresh } from "../ui";
 import { useMediaStore } from "@/store/mediaStore";
 
 interface Props {
@@ -35,7 +36,7 @@ export const VaultSettings = ({ onClose }: Props) => {
 
   return (
     <div 
-      className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
+      className="fixed inset-0 z-600 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
       onClick={onClose}
     >
       <div 
@@ -62,7 +63,7 @@ export const VaultSettings = ({ onClose }: Props) => {
             {/* Backup Action */}
             <button 
               onClick={exportData}
-              className="w-full flex items-center justify-between p-6 bg-neutral-950 border border-neutral-900 rounded-[32px] group hover:border-sky-500/50 transition-all"
+              className="w-full flex items-center justify-between p-6 bg-neutral-950 border border-neutral-900 rounded-4xl group hover:border-sky-500/50 transition-all"
             >
               <div className="flex items-center gap-4 text-left">
                 <div className="p-3 bg-sky-500/10 text-sky-500 rounded-2xl group-hover:bg-sky-500 group-hover:text-white transition-colors">
@@ -74,11 +75,15 @@ export const VaultSettings = ({ onClose }: Props) => {
                 </div>
               </div>
             </button>
+            {/* Bulk Refresh Action (embedded component) */}
+            <div>
+              <BulkMetadataRefresh />
+            </div>
 
             {/* Wipe Action */}
             <button 
               onClick={clearVault}
-              className="w-full flex items-center justify-between p-6 bg-red-500/5 border border-red-500/10 rounded-[32px] group hover:bg-red-500/10 hover:border-red-500/50 transition-all"
+              className="w-full flex items-center justify-between p-6 bg-red-500/5 border border-red-500/10 rounded-4xl group hover:bg-red-500/10 hover:border-red-500/50 transition-all"
             >
               <div className="flex items-center gap-4 text-left">
                 <div className="p-3 bg-red-500/10 text-red-500 rounded-2xl group-hover:bg-red-500 group-hover:text-white transition-colors">

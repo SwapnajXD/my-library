@@ -44,7 +44,7 @@ export const VaultCard = ({ item, onView, onDelete }: VaultCardProps) => {
         <Trash2 size={14} />
       </button>
 
-      <div className="absolute inset-0 flex flex-col justify-end p-5 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none">
+      <div className="absolute inset-0 flex flex-col justify-end p-5 bg-linear-to-t from-black via-black/40 to-transparent pointer-events-none">
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-1.5 px-2 py-1 bg-white/10 backdrop-blur-md rounded-lg">
             {getTypeIcon(item.type)}
