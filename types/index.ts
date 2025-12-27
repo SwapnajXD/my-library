@@ -16,9 +16,9 @@ export interface Media {
   
   // Progress Tracking
   progress: number;             
-  total: number; // Default to 0 if unknown
+  total: number; // Mandatory for progress logic and "Continue" button math
   
-  // API Specific counters (Optional helpers)
+  // API Specific counters (Optional helpers for data mapping)
   episodes?: number;            
   chapters?: number;            
   
