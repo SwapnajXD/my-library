@@ -101,7 +101,7 @@ export default function Page() {
             item={selectedItem} 
             onClose={() => setSelectedItem(null)} 
             onEdit={() => setEditingId(selectedItem.id)}
-            onGenreClick={(genre) => {
+            onGenreClick={(genre: string) => {
               setActiveGenre(genre);
               setSelectedItem(null);
             }}

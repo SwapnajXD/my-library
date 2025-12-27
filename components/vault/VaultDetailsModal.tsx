@@ -5,22 +5,19 @@ import { Media, MediaStatus } from '@/types';
 import { useMediaStore } from '@/store/mediaStore';
 import { 
   X, Star, Play, BookOpen, Tag, ExternalLink, 
-  Search, Youtube, Globe, Settings2, Calendar, User, Clock, Hash
+  Search, Youtube, Globe, Settings2, Clock, Hash
 } from 'lucide-react';
 
 interface Props {
   item: Media;
   onClose: () => void;
   onEdit: () => void;
+  onGenreClick: (genre: string) => void; // Added this line
 }
 
-export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
+export const VaultDetailsModal = ({ item, onClose, onEdit, onGenreClick }: Props) => {
   const [showSources, setShowSources] = useState(false);
   const updateMedia = useMediaStore((state) => state.updateMedia);
-
-  const formatStatus = (status: MediaStatus | string) => {
-    return status.replace(/_/g, ' ');
-  };
 
   const sources = [
     { 
@@ -43,48 +40,36 @@ export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
   ];
 
   return (
-    <div 
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-2xl" 
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-2xl" onClick={onClose}>
       <div 
-        className="bg-[#050505] w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[48px] flex flex-col md:flex-row shadow-2xl border border-neutral-900 animate-in fade-in zoom-in duration-300"
+        className="bg-[#050505] w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[48px] flex flex-col md:flex-row shadow-2xl border border-neutral-900 animate-in fade-in zoom-in duration-300" 
         onClick={e => e.stopPropagation()}
       >
         {/* Left Side: Poster */}
         <div className="w-full md:w-[40%] h-72 md:h-auto relative shrink-0">
-          <img 
-            src={item.poster || '/placeholder.png'} 
-            className="w-full h-full object-cover" 
-            alt={item.title} 
-          />
+          <img src={item.poster || '/placeholder.png'} className="w-full h-full object-cover" alt={item.title} />
           <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#050505] via-transparent to-transparent" />
         </div>
 
-        {/* Right Side: Content Area */}
+        {/* Right Side: Content */}
         <div className="flex-1 p-8 md:p-12 overflow-y-auto custom-scrollbar flex flex-col bg-[#050505]">
           {!showSources ? (
             <>
-              {/* Header Info */}
               <div className="flex justify-between items-start mb-6">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-500">{item.type}</span>
                     <span className="w-1 h-1 rounded-full bg-neutral-800" />
                     <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-600">
-                      {formatStatus(item.status)}
+                        {item.status.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  <h2 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
-                    {item.title}
-                  </h2>
+                  <h2 className="text-3xl font-black tracking-tighter uppercase italic text-white leading-none">{item.title}</h2>
                 </div>
-                <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white transition-colors">
-                  <X size={24} />
-                </button>
+                <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white transition-colors"><X size={24} /></button>
               </div>
 
-              {/* Quick Metadata Tiles */}
+              {/* Stats */}
               <div className="grid grid-cols-2 gap-3 mb-8">
                 <div className="flex items-center gap-3 bg-neutral-900/50 p-4 rounded-2xl border border-neutral-800">
                   <Star size={16} className="text-yellow-500 fill-yellow-500" />
@@ -96,36 +81,37 @@ export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
                 </div>
               </div>
 
-              {/* Genres Section */}
+              {/* Clickable Genres */}
               {item.genres && item.genres.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-700 mb-3 flex items-center gap-2">
-                    <Hash size={10} /> Tags
+                    <Hash size={10} /> Tags (Filter)
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {item.genres.map((genre) => (
-                      <span 
+                      <button 
                         key={genre} 
-                        className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-[9px] font-black uppercase text-neutral-400 tracking-widest hover:text-white hover:border-neutral-700 transition-all"
+                        onClick={() => onGenreClick(genre)}
+                        className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-[9px] font-black uppercase text-neutral-400 tracking-widest hover:bg-sky-500 hover:text-white transition-all active:scale-95"
                       >
                         {genre}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Full Synopsis Section */}
+              {/* Synopsis */}
               <div className="mb-10">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-700 mb-4 flex items-center gap-2">
                   <Tag size={10} /> Full Synopsis
                 </h3>
                 <p className="text-sm text-neutral-400 leading-relaxed font-medium whitespace-pre-wrap">
-                  {item.synopsis || "No detailed description available for this entry."}
+                  {item.synopsis || "No description available."}
                 </p>
               </div>
 
-              {/* Bottom Actions */}
+              {/* Footer Actions */}
               <div className="mt-auto pt-6 border-t border-neutral-900 flex gap-4 bg-[#050505]">
                 <button 
                   onClick={onEdit} 
@@ -143,34 +129,25 @@ export const VaultDetailsModal = ({ item, onClose, onEdit }: Props) => {
             </>
           ) : (
             <>
-              {/* Source Selector View */}
+              {/* Source View */}
               <div className="flex justify-between items-center mb-8">
-                <div className="space-y-1">
-                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-500">External Links</p>
-                   <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Select Source</h2>
-                </div>
-                <button 
-                  onClick={() => setShowSources(false)} 
-                  className="text-neutral-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] border border-neutral-800 px-4 py-2 rounded-full transition-all"
-                >
-                  Back
-                </button>
+                <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Select Source</h2>
+                <button onClick={() => setShowSources(false)} className="text-neutral-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] border border-neutral-800 px-4 py-2 rounded-full">Back</button>
               </div>
-
               <div className="space-y-3 flex-1">
                 {sources.map((source) => (
                   <a 
-                    key={source.name}
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    key={source.name} 
+                    href={source.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
                     className="flex items-center justify-between p-5 bg-neutral-900/40 border border-neutral-800 rounded-3xl hover:bg-neutral-800/60 hover:border-neutral-700 transition-all group"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="text-neutral-500 group-hover:text-white transition-colors">{source.icon}</div>
+                      <div className="text-neutral-500 group-hover:text-white">{source.icon}</div>
                       <span className="text-[11px] font-black text-white uppercase tracking-widest">{source.name}</span>
                     </div>
-                    <ExternalLink size={14} className="text-neutral-700 group-hover:text-white transition-colors" />
+                    <ExternalLink size={14} className="text-neutral-700 group-hover:text-white" />
                   </a>
                 ))}
               </div>
