@@ -33,7 +33,7 @@ export default function Page() {
              <div className="p-3 bg-neutral-900 rounded-2xl text-sky-500">
                 <LayoutGrid size={24} />
              </div>
-             <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic">The Vault</h1>
+             <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic">Vault</h1>
           </div>
 
           <button 
