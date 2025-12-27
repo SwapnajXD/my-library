@@ -1,108 +1,119 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useMediaStore } from '@/store/mediaStore';
-import { searchExternalMedia } from '@/services/mediaApi';
-import { Search, X, Loader2, Plus, ImageOff, Star, BookOpen } from 'lucide-react';
-import { MediaType, MediaStatus, Media } from '@/types';
+import { useState, useEffect } from "react";
+import { Media, MediaType } from "@/types";
+import { useMediaStore } from "@/store/mediaStore";
+import { Search, X, Film, Tv, BookOpen, Loader2, Star, Calendar } from "lucide-react";
 
-interface AddSearchProps { 
-  isOpen: boolean; 
-  onClose: () => void; 
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
-  const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<MediaType>('movie');
+export default function AddSearch({ isOpen, onClose }: Props) {
+  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<MediaType>("movie");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const addMedia = useMediaStore((state) => state.addMedia);
 
-  const normalizedResults = useMemo(() => {
-    const map = new Map();
-    
-    results.forEach((item) => {
-      let normalized: Partial<Media> = {};
-
-      if (item.mal_id) {
-        normalized = {
-          id: `mal-${item.mal_id}`,
-          title: item.title,
-          poster: item.images?.jpg?.large_image_url || '',
-          rating: item.score || 0,
-          year: item.aired?.prop?.from?.year || item.published?.prop?.from?.year || 'N/A',
-          total: item.episodes || item.chapters || 0,
-        };
-      } 
-      else if (item.vote_count !== undefined) {
-        normalized = {
-          id: `tmdb-${item.id}`,
-          title: item.title || item.name,
-          poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '',
-          rating: item.vote_average || 0,
-          year: (item.release_date || item.first_air_date || '').split('-')[0] || 'N/A',
-        };
-      }
-      else if (item.key) {
-        normalized = {
-          id: `ol-${item.key.replace('/works/', '')}`,
-          title: item.title,
-          poster: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-L.jpg` : '',
-          rating: item.ratings_average ? item.ratings_average * 2 : 0,
-          year: item.first_publish_year || 'N/A',
-          creator: item.author_name?.[0] || 'Unknown Author',
-        };
-      }
-
-      if (normalized.id && !map.has(normalized.id)) map.set(normalized.id, normalized);
-    });
-    return Array.from(map.values());
-  }, [results]);
-
-  if (!isOpen) return null;
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const searchMedia = async () => {
+    if (!query) return;
     setLoading(true);
-    const apiResults = await searchExternalMedia(query, activeTab);
-    setResults(apiResults);
-    setLoading(false);
+    try {
+      let url = "";
+      const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+
+      if (activeTab === "movie" || activeTab === "tv") {
+        url = `https://api.themoviedb.org/3/search/${activeTab}?api_key=${TMDB_KEY}&query=${encodeURIComponent(query)}`;
+      } else if (activeTab === "anime" || activeTab === "manga") {
+        url = `https://api.jikan.moe/v4/${activeTab}?q=${encodeURIComponent(query)}`;
+      } else if (activeTab === "book") {
+        url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`;
+      }
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      // MAPPING LOGIC FOR MISSING METADATA
+      let mappedResults = [];
+
+      if (activeTab === "movie" || activeTab === "tv") {
+        mappedResults = data.results.map((item: any) => ({
+          id: String(item.id),
+          title: item.title || item.name,
+          type: activeTab,
+          status: "plan_to_watch",
+          progress: 0,
+          total: activeTab === "tv" ? (item.episode_count || 0) : 1,
+          poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "",
+          rating: item.vote_average || 0,
+          year: (item.release_date || item.first_air_date || "").split("-")[0],
+          synopsis: item.overview,
+          genres: [], // TMDB uses IDs, would require extra fetch for names
+        }));
+      } else if (activeTab === "anime" || activeTab === "manga") {
+        mappedResults = data.data.map((item: any) => ({
+          id: String(item.mal_id),
+          title: item.title,
+          type: activeTab,
+          status: "plan_to_watch",
+          progress: 0,
+          total: activeTab === "anime" ? (item.episodes || 0) : (item.chapters || 0),
+          poster: item.images?.jpg?.large_image_url || "",
+          rating: item.score || 0,
+          year: item.year || item.published?.prop?.from?.year || "N/A",
+          synopsis: item.synopsis,
+          creator: item.authors?.[0]?.name || item.studios?.[0]?.name || "Unknown",
+          genres: item.genres?.map((g: any) => g.name) || [],
+        }));
+      } else if (activeTab === "book") {
+        mappedResults = data.items.map((item: any) => ({
+          id: item.id,
+          title: item.volumeInfo.title,
+          type: "book",
+          status: "plan_to_watch",
+          progress: 0,
+          total: item.volumeInfo.pageCount || 0,
+          poster: item.volumeInfo.imageLinks?.thumbnail?.replace("http:", "https:"),
+          rating: item.volumeInfo.averageRating || 0,
+          year: (item.volumeInfo.publishedDate || "").split("-")[0],
+          synopsis: item.volumeInfo.description,
+          creator: item.volumeInfo.authors?.[0] || "Unknown",
+          genres: item.volumeInfo.categories || [],
+        }));
+      }
+
+      setResults(mappedResults);
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddItem = (item: any) => {
-    const isPrintMedia = activeTab === 'manga' || activeTab === 'book';
-    addMedia({
-      ...item,
-      type: activeTab,
-      status: 'plan_to_watch', 
-      progress: 0,
-      total: item.total || item.episodes || item.chapters || 0,
-    });
+  const handleAdd = (item: Media) => {
+    addMedia(item);
     onClose();
   };
 
-  const tabs: MediaType[] = ['movie', 'tv', 'anime', 'manga', 'book'];
-
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4" onClick={onClose}>
-      <div className="bg-black w-full max-w-2xl h-[85vh] flex flex-col rounded-[40px] border border-neutral-900 overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-        
-        <div className="px-8 py-6 flex justify-between items-center border-b border-neutral-900">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-neutral-900 rounded-lg text-white"><BookOpen size={14}/></div>
-             <h2 className="text-[10px] font-black tracking-[0.3em] uppercase text-white">The Discovery</h2>
-          </div>
-          <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white transition-colors"><X size={20} /></button>
+    <div className="fixed inset-0 z-[400] bg-black/95 backdrop-blur-2xl p-4 flex flex-col items-center">
+      <div className="w-full max-w-3xl flex flex-col h-full">
+        {/* Header */}
+        <div className="flex justify-between items-center py-6">
+          <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Find Content</h2>
+          <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white"><X /></button>
         </div>
 
-        <div className="px-8 pt-6 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => (
+        {/* Tabs */}
+        <div className="flex gap-2 p-1 bg-neutral-900 rounded-2xl mb-6">
+          {(['movie', 'tv', 'anime', 'manga', 'book'] as MediaType[]).map((tab) => (
             <button
               key={tab}
-              onClick={() => { setActiveTab(tab); setResults([]); setQuery(''); }}
-              className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 ${
-                activeTab === tab ? 'bg-white text-black' : 'bg-neutral-900 text-neutral-500'
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeTab === tab ? "bg-white text-black" : "text-neutral-500 hover:text-neutral-300"
               }`}
             >
               {tab}
@@ -110,50 +121,53 @@ export default function AddSearch({ isOpen, onClose }: AddSearchProps) {
           ))}
         </div>
 
-        <div className="px-8 py-4">
-          <form onSubmit={handleSearch} className="relative">
-            <input 
-              autoFocus
-              placeholder={`Search for a ${activeTab}...`} 
-              className="w-full pl-14 pr-6 py-5 bg-neutral-900 border-none rounded-3xl outline-none text-sm font-bold text-white placeholder:text-neutral-700"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-            <Search className="w-5 h-5 text-neutral-700 absolute left-5 top-1/2 -translate-y-1/2" />
-          </form>
+        {/* Search Input */}
+        <div className="relative mb-8">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+          <input
+            autoFocus
+            type="text"
+            placeholder={`Search ${activeTab}...`}
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-neutral-600 focus:outline-none focus:border-sky-500 transition-all"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && searchMedia()}
+          />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2 custom-scrollbar">
+        {/* Results */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-neutral-800" /></div>
+            <div className="flex flex-col items-center justify-center py-20 text-neutral-500 gap-4">
+              <Loader2 className="animate-spin" size={32} />
+              <p className="text-[10px] font-black uppercase tracking-widest">Searching the archives...</p>
+            </div>
           ) : (
-            normalizedResults.map((item) => (
+            results.map((item) => (
               <div 
-                key={item.id} 
-                className="flex gap-4 p-4 hover:bg-neutral-900/40 rounded-[28px] cursor-pointer group border border-transparent hover:border-neutral-900 transition-all"
-                onClick={() => handleAddItem(item)}
+                key={item.id}
+                className="group flex gap-6 p-4 bg-neutral-900/40 border border-neutral-900 rounded-[32px] hover:border-neutral-700 transition-all cursor-pointer"
+                onClick={() => handleAdd(item)}
               >
-                <div className="w-16 h-24 bg-neutral-900 rounded-xl overflow-hidden shrink-0 border border-neutral-800">
-                  {item.poster ? (
-                    <img src={item.poster} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" alt={item.title} />
-                  ) : (
-                    <div className="flex items-center justify-center h-full"><ImageOff size={20} className="text-neutral-800" /></div>
-                  )}
+                <div className="w-24 h-36 rounded-2xl overflow-hidden shrink-0 bg-neutral-800">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
                 </div>
-
-                <div className="flex flex-col justify-center flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-neutral-200 group-hover:text-white line-clamp-1">{item.title}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-neutral-600 font-bold uppercase">{item.year}</span>
-                    <div className="flex items-center gap-1 ml-auto">
-                      <Star size={10} className="fill-yellow-600 text-yellow-600" />
-                      <span className="text-[10px] font-black text-neutral-400">{item.rating?.toFixed(1)}</span>
+                <div className="flex-1 py-2">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-black text-lg text-white leading-tight uppercase italic group-hover:text-sky-500 transition-colors">
+                      {item.title}
+                    </h3>
+                    <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-lg">
+                      <Star size={10} className="fill-yellow-500 text-yellow-500" />
+                      <span className="text-[10px] font-bold">{item.rating?.toFixed(1)}</span>
                     </div>
                   </div>
-                  {item.creator && <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-tighter mt-1 truncate">{item.creator}</p>}
-                </div>
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900 text-neutral-500 group-hover:bg-white group-hover:text-black self-center transition-all shrink-0">
-                  <Plus size={18} />
+                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-3">
+                    {item.year} • {item.creator || "Unknown Creator"}
+                  </p>
+                  <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed">
+                    {item.synopsis || "No description available."}
+                  </p>
                 </div>
               </div>
             ))
