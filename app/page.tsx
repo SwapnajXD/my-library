@@ -84,7 +84,7 @@ export default function Page() {
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
-                  VAUL<span className="text-sky-500">T</span>
+                  VAULT
                 </h1>
                 {activeGenre && (
                   <button onClick={() => setActiveGenre(null)} className="text-[8px] font-black uppercase tracking-[0.4em] text-sky-500 mt-1 flex items-center gap-1">
