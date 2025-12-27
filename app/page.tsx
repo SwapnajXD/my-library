@@ -17,11 +17,13 @@ export default function Page() {
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filter media by genre if one is selected
   const filteredMedia = useMemo(() => {
     if (!activeGenre) return media;
     return media.filter(item => item.genres?.includes(activeGenre));
   }, [media, activeGenre]);
 
+  // Items currently being watched/read with progress remaining
   const nextUp = useMemo(() => {
     return media.filter(item => 
       (item.status === 'watching' || item.status === 'reading') && 
@@ -64,6 +66,7 @@ export default function Page() {
     fileReader.readAsText(files[0]);
   };
 
+  // Close modals on Escape key
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -93,6 +96,12 @@ export default function Page() {
                 </div>
                 <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-none">VAULt</h1>
              </div>
+             {activeGenre && (
+               <button onClick={() => setActiveGenre(null)} className="flex items-center gap-2 px-4 py-2 bg-[#0A0A0A] border border-[#1A1A1A] rounded-full text-sky-400 hover:border-sky-500 transition-all">
+                 <span className="text-[10px] font-black uppercase tracking-widest">{activeGenre}</span>
+                 <CloseIcon size={12} strokeWidth={3} />
+               </button>
+             )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -108,6 +117,7 @@ export default function Page() {
           </div>
         </header>
 
+        {/* Hidden Settings Panel */}
         {showSettings && (
           <section className="bg-[#050505] border border-[#1A1A1A] rounded-[32px] p-8 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -116,7 +126,7 @@ export default function Page() {
                   <ShieldCheck size={14} className="text-sky-500" />
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">System Archive</p>
                 </div>
-                <p className="text-xs text-[#444444] font-medium italic">Manage backups and storage.</p>
+                <p className="text-xs text-[#444444] font-medium italic">Manage local database backups and storage protocols.</p>
               </div>
               <div className="flex gap-4 w-full md:w-auto">
                 <button onClick={exportVault} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-sky-500 transition-all active:scale-95">
@@ -131,6 +141,7 @@ export default function Page() {
           </section>
         )}
 
+        {/* Continuity Queue */}
         {nextUp.length > 0 && (
           <section className="animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-3 mb-6 px-2">
@@ -157,6 +168,7 @@ export default function Page() {
           </section>
         )}
 
+        {/* Main Grid */}
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {filteredMedia.length > 0 ? (
             filteredMedia.map((item) => (
@@ -169,6 +181,7 @@ export default function Page() {
           )}
         </section>
 
+        {/* Modals */}
         {isSearching && <AddSearch isOpen={isSearching} onClose={() => setIsSearching(false)} />}
         {selectedItem && (
           <VaultDetailsModal 
