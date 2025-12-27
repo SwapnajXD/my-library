@@ -1,44 +1,57 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useMediaStore } from "@/store/mediaStore";
 import { VaultCard, VaultDetailsModal, VaultEditModal } from "@/components/vault";
 import { StatsView } from "@/components/stats/StatsView";
-import AddSearch from "@/components/search/AddSearch"; 
-import { Plus, X as CloseIcon, Zap, Download, Upload, Settings, ShieldCheck, BarChart3, ChevronLeft } from "lucide-react";
-import { Media } from "@/types";
+import { AddSearch } from "@/components/search/AddSearch"; 
+import { 
+  Plus, 
+  Zap, 
+  Download, 
+  Upload, 
+  Settings, 
+  ShieldCheck, 
+  BarChart3, 
+  ChevronLeft,
+  Activity
+} from "lucide-react";
+import { MediaItem } from "@/store/mediaStore";
 
 export default function Page() {
   const { media, deleteMedia, setMedia } = useMediaStore();
   
   const [view, setView] = useState<'grid' | 'stats'>('grid');
-  const [selectedItem, setSelectedItem] = useState<Media | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filtered items for the grid
   const filteredMedia = useMemo(() => {
     if (!activeGenre) return media;
     return media.filter(item => item.genres?.includes(activeGenre));
   }, [media, activeGenre]);
 
+  // Continuity Queue - Explicitly handling status comparison to avoid TS error
   const nextUp = useMemo(() => {
-    return media.filter(item => 
-      (item.status === 'watching' || item.status === 'reading') && 
-      item.progress < (item.total || 999)
-    ).slice(0, 6);
+    return media.filter(item => {
+      const status = item.status as string; // Casting to avoid union overlap error
+      const isActive = status === 'watching' || status === 'reading';
+      const isIncomplete = item.progress < (item.total || 999);
+      return isActive && isIncomplete;
+    }).slice(0, 6);
   }, [media]);
 
   const exportVault = () => {
     const dataStr = JSON.stringify(media, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `vault-backup-${new Date().toISOString().split('T')[0]}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    const link = document.createElement('a');
+    link.setAttribute('href', dataUri);
+    link.setAttribute('download', `vault-backup-${new Date().toISOString().split('T')[0]}.json`);
+    link.click();
   };
 
   const importVault = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,16 +60,13 @@ export default function Page() {
     if (!files || files.length === 0) return;
     fileReader.onload = (e) => {
       try {
-        const content = e.target?.result;
-        if (typeof content === 'string') {
-          const importedData = JSON.parse(content);
-          if (Array.isArray(importedData)) {
-            const currentIds = new Set(media.map(m => m.id));
-            const newEntries = importedData.filter(m => !currentIds.has(m.id));
-            setMedia([...media, ...newEntries]);
-          }
+        const importedData = JSON.parse(e.target?.result as string);
+        if (Array.isArray(importedData)) {
+          const currentIds = new Set(media.map(m => m.id));
+          const newEntries = importedData.filter(m => !currentIds.has(m.id));
+          setMedia([...media, ...newEntries]);
         }
-      } catch (err) { alert("Invalid JSON"); }
+      } catch (err) { alert("Protocol Error: Invalid JSON File"); }
     };
     fileReader.readAsText(files[0]);
   };
@@ -65,28 +75,33 @@ export default function Page() {
     <main className="min-h-screen bg-[#000000] text-[#E5E5E5] p-4 md:p-12 selection:bg-sky-500/30">
       <div className="max-w-7xl mx-auto space-y-12">
         
-        {/* Header - Back to ultra minimal */}
+        {/* Header Block */}
         <header className="flex justify-between items-center border-b border-[#1A1A1A] pb-8">
           <div className="flex items-center gap-6">
-             <div className="flex items-center gap-4">
-                <div className="p-3 bg-[#050505] border border-[#1A1A1A] rounded-2xl text-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.1)]">
-                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 2L22 12L12 22L2 12L12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
-                      <path d="M12 7V17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" opacity="0.3" />
-                      <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
-                   </svg>
-                </div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-none">VAULt</h1>
-             </div>
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-[#050505] border border-[#1A1A1A] rounded-2xl text-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.15)]">
+                <Activity size={24} />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-none">
+                  VAUL<span className="text-sky-500">T</span>
+                </h1>
+                {activeGenre && (
+                  <button onClick={() => setActiveGenre(null)} className="text-[8px] font-black uppercase tracking-[0.4em] text-sky-500 mt-1 flex items-center gap-1">
+                    [ Filter: {activeGenre} ] ×
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button 
               onClick={() => {
                 setShowSettings(!showSettings);
-                if (view === 'stats') setView('grid'); // Reset view when closing settings
+                if (view === 'stats') setView('grid');
               }}
-              className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-white text-black border-white' : 'bg-[#050505] border-[#1A1A1A] text-[#444444] hover:text-white'}`}
+              className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-white text-black border-white' : 'bg-[#050505] border-[#1A1A1A] text-[#444] hover:text-white'}`}
             >
               <Settings size={20} />
             </button>
@@ -96,9 +111,9 @@ export default function Page() {
           </div>
         </header>
 
-        {/* Unified Settings & Stats Panel */}
+        {/* System Protocol Panel (Settings & Stats) */}
         {showSettings && (
-          <section className="bg-[#050505] border border-[#1A1A1A] rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+          <section className="bg-[#050505] border border-[#1A1A1A] rounded-[40px] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="p-8 border-b border-[#1A1A1A] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div className="flex items-center gap-4">
                 {view === 'stats' && (
@@ -109,11 +124,9 @@ export default function Page() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck size={14} className="text-sky-500" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">System Protocol</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Neural Dashboard</p>
                   </div>
-                  <p className="text-xs text-[#444444] font-medium italic">
-                    {view === 'stats' ? "Real-time data visualization of your archive." : "Manage local database and view analytics."}
-                  </p>
+                  <p className="text-xs text-[#444] italic font-medium">Manage archive integrity and metadata mapping.</p>
                 </div>
               </div>
               
@@ -121,39 +134,40 @@ export default function Page() {
                 {view === 'grid' && (
                   <button 
                     onClick={() => setView('stats')}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-sky-500/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-sky-500 hover:bg-sky-500 hover:text-white transition-all"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-sky-500/10 border border-sky-500/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-sky-500 hover:bg-sky-500 hover:text-white transition-all"
                   >
-                    <BarChart3 size={16} /> Analytics
+                    <BarChart3 size={16} /> Data Analytics
                   </button>
                 )}
-                <button onClick={exportVault} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
-                  <Download size={16} /> Export
+                <button onClick={exportVault} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-black border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
+                  <Download size={16} /> Backup
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
-                  <Upload size={16} /> Import
+                <button onClick={() => fileInputRef.current?.click()} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-black border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
+                  <Upload size={16} /> Restore
                 </button>
                 <input type="file" ref={fileInputRef} onChange={importVault} accept=".json" className="hidden" />
               </div>
             </div>
 
             {view === 'stats' && (
-              <div className="p-8 bg-black/50">
+              <div className="p-8 bg-black/50 overflow-y-auto max-h-[80vh] custom-scrollbar">
                 <StatsView />
               </div>
             )}
           </section>
         )}
 
-        {/* Main Interface */}
+        {/* Core Interface */}
         {view === 'grid' && (
-          <div className="space-y-12">
+          <div className="space-y-16">
+            {/* Continuity Queue */}
             {nextUp.length > 0 && (
-              <section className="animate-in fade-in slide-in-from-top-4 duration-500">
+              <section className="animate-in fade-in slide-in-from-left-4 duration-700">
                 <div className="flex items-center gap-3 mb-6 px-2">
                   <Zap size={14} className="text-sky-500" />
-                  <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#333333]">Continuity Queue</h2>
+                  <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#333]">Active Sequences</h2>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
                   {nextUp.map((item) => (
                     <button 
                       key={item.id} 
@@ -162,9 +176,9 @@ export default function Page() {
                     >
                       <img src={item.poster} alt="" className="w-10 h-10 rounded-lg object-cover grayscale group-hover:grayscale-0 transition-all" />
                       <div className="text-left pr-4">
-                        <p className="text-[9px] font-black text-white uppercase tracking-tight line-clamp-1">{item.title}</p>
-                        <p className="text-[8px] font-bold text-[#444444] uppercase tracking-widest mt-1">
-                          <span className="text-sky-500">{item.progress}</span> / {item.total || '?'}
+                        <p className="text-[9px] font-black text-white uppercase tracking-tight line-clamp-1 max-w-[120px]">{item.title}</p>
+                        <p className="text-[8px] font-bold text-[#444] uppercase tracking-widest mt-1">
+                          EP <span className="text-sky-500">{item.progress}</span> / {item.total || '∞'}
                         </p>
                       </div>
                     </button>
@@ -173,31 +187,46 @@ export default function Page() {
               </section>
             )}
 
-            <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {/* The Main Archive Grid */}
+            <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10">
               {filteredMedia.length > 0 ? (
                 filteredMedia.map((item) => (
                   <VaultCard key={item.id} item={item} onView={setSelectedItem} onDelete={deleteMedia} />
                 ))
               ) : (
-                <div className="col-span-full py-32 text-center border border-dashed border-[#1A1A1A] rounded-[40px]">
-                  <p className="text-[#1A1A1A] font-black uppercase tracking-[0.6em] text-[11px] italic">VAULT OFFLINE</p>
+                <div className="col-span-full py-40 text-center border border-dashed border-[#1A1A1A] rounded-[40px]">
+                  <p className="text-[#1A1A1A] font-black uppercase tracking-[0.6em] text-[11px] italic">VAULT OFFLINE // NO DATA FOUND</p>
                 </div>
               )}
             </section>
           </div>
         )}
 
-        {/* Modals */}
-        {isSearching && <AddSearch isOpen={isSearching} onClose={() => setIsSearching(false)} />}
+        {/* Global Modals */}
+        {isSearching && <AddSearch onClose={() => setIsSearching(false)} />}
+        
         {selectedItem && (
           <VaultDetailsModal 
             item={selectedItem} 
             onClose={() => setSelectedItem(null)} 
-            onEdit={() => setEditingId(selectedItem.id)}
-            onGenreClick={(genre) => { setActiveGenre(genre); setSelectedItem(null); }}
+            onEdit={() => {
+              setEditingId(selectedItem.id);
+              setSelectedItem(null);
+            }}
+            onGenreClick={(genre) => {
+              setActiveGenre(genre);
+              setSelectedItem(null);
+              setShowSettings(false);
+            }}
           />
         )}
-        {editingId && <VaultEditModal itemId={editingId} onClose={() => setEditingId(null)} />}
+
+        {editingId && (
+          <VaultEditModal 
+            itemId={editingId} 
+            onClose={() => setEditingId(null)} 
+          />
+        )}
       </div>
     </main>
   );

@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from 'react';
-import { Media, MediaStatus } from '@/types';
-import { useMediaStore } from '@/store/mediaStore';
+// Changed Media to MediaItem from store
+import { useMediaStore, type MediaItem } from '@/store/mediaStore';
 import { 
   X, Star, Play, BookOpen, Tag, ExternalLink, 
   Search, Youtube, Globe, Settings2, Clock, Hash
 } from 'lucide-react';
 
 interface Props {
-  item: Media;
+  item: MediaItem; // Changed to MediaItem
   onClose: () => void;
   onEdit: () => void;
-  onGenreClick: (genre: string) => void; // Added this line
+  onGenreClick: (genre: string) => void;
 }
 
 export const VaultDetailsModal = ({ item, onClose, onEdit, onGenreClick }: Props) => {
@@ -31,9 +31,10 @@ export const VaultDetailsModal = ({ item, onClose, onEdit, onGenreClick }: Props
       url: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}+trailer` 
     },
     { 
-      name: item.type === 'manga' ? 'MangaDex' : 'AnimeKai', 
+      // Added .toLowerCase() to ensure matching works with "Anime" or "Manga"
+      name: item.type.toLowerCase() === 'manga' ? 'MangaDex' : 'AnimeKai', 
       icon: <Globe size={18} />, 
-      url: item.type === 'manga' 
+      url: item.type.toLowerCase() === 'manga' 
         ? `https://mangadex.org/search?q=${encodeURIComponent(item.title)}` 
         : `https://animekai.to/browser?keyword=${encodeURIComponent(item.title)}` 
     },
@@ -107,7 +108,8 @@ export const VaultDetailsModal = ({ item, onClose, onEdit, onGenreClick }: Props
                   <Tag size={10} /> Full Synopsis
                 </h3>
                 <p className="text-sm text-neutral-400 leading-relaxed font-medium whitespace-pre-wrap">
-                  {item.synopsis || "No description available."}
+                  {/* Fixed optional chaining check for synopsis */}
+                  {(item as any).synopsis || "No description available."}
                 </p>
               </div>
 
@@ -123,7 +125,7 @@ export const VaultDetailsModal = ({ item, onClose, onEdit, onGenreClick }: Props
                   onClick={() => setShowSources(true)}
                   className="flex-1 py-4 rounded-[20px] bg-white text-black text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-sky-500 hover:text-white transition-all shadow-xl"
                 >
-                  {item.type === 'manga' ? <BookOpen size={16}/> : <Play size={16}/>} Continue
+                  {item.type.toLowerCase() === 'manga' ? <BookOpen size={16}/> : <Play size={16}/>} Continue
                 </button>
               </div>
             </>
