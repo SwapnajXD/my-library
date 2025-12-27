@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMediaStore } from "@/store/mediaStore";
 import { VaultCard, VaultDetailsModal, VaultEditModal } from "@/components/vault";
-// FIXED: Removed curly braces for default export
 import AddSearch from "@/components/search/AddSearch"; 
 import { Plus, LayoutGrid } from "lucide-react";
 import { Media } from "@/types";
@@ -15,11 +14,22 @@ export default function Page() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  // When a user selects a result from AddSearch
+  // Global ESC key listener for all modals
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (editingId) setEditingId(null);
+        else if (selectedItem) setSelectedItem(null);
+        else if (isSearching) setIsSearching(false);
+      }
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [editingId, selectedItem, isSearching]);
+
   const handleSearchResultSelect = (newItem: Media) => {
     addMedia(newItem);
     setIsSearching(false);
-    // Optional: Open editor immediately if you want to set progress
     setEditingId(newItem.id); 
   };
 
@@ -33,7 +43,7 @@ export default function Page() {
              <div className="p-3 bg-neutral-900 rounded-2xl text-sky-500">
                 <LayoutGrid size={24} />
              </div>
-             <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic">Vault</h1>
+             <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic">VAULt</h1>
           </div>
 
           <button 
@@ -53,27 +63,28 @@ export default function Page() {
 
         {/* --- MODALS --- */}
 
-        {/* The AddSearch Modal */}
         {isSearching && (
           <AddSearch 
             isOpen={isSearching} 
             onClose={() => setIsSearching(false)} 
-            // Note: The prop name in your AddSearch component was "onSelect" in some versions 
-            // and logic was handled internally in others. 
-            // If your AddSearch doesn't take onSelect, the store logic is already inside it.
           />
         )}
 
+        {/* Details Modal remains open even if Editing starts */}
         {selectedItem && (
           <VaultDetailsModal 
             item={selectedItem} 
             onClose={() => setSelectedItem(null)} 
-            onEdit={() => { setEditingId(selectedItem.id); setSelectedItem(null); }} 
+            onEdit={() => setEditingId(selectedItem.id)} 
           />
         )}
 
+        {/* Modify Modal sits on top (z-index 300) */}
         {editingId && (
-          <VaultEditModal itemId={editingId} onClose={() => setEditingId(null)} />
+          <VaultEditModal 
+            itemId={editingId} 
+            onClose={() => setEditingId(null)} 
+          />
         )}
       </div>
     </main>
