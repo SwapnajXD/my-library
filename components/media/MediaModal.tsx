@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Media } from '@/types';
-import { X, Star, Play, BookOpen, Tag, ExternalLink, Search, Youtube, Globe } from 'lucide-react';
+import { Media } from "@/types";
+import { X, Play, BookOpen, Star, Calendar } from "lucide-react";
+import { useEffect } from "react";
 
 interface MediaModalProps {
   item: Media;
@@ -11,94 +11,125 @@ interface MediaModalProps {
 }
 
 export default function MediaModal({ item, onClose, onEdit }: MediaModalProps) {
-  const [showSources, setShowSources] = useState(false);
-
-  // Close on Escape
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    window.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    
+    return () => {
+      window.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "unset";
+    };
   }, [onClose]);
 
-  const isReadingMaterial = item.type === 'manga' || item.type === 'book';
-
-  const getSpecificSource = () => {
-    if (item.type === 'manga') return { name: 'MangaDex', url: `https://mangadex.org/search?q=${encodeURIComponent(item.title)}` };
-    if (item.type === 'book') return { name: 'Google Books', url: `https://www.google.com/search?tbm=bks&q=${encodeURIComponent(item.title)}` };
-    return { name: 'AnimeKai', url: `https://animekai.to/browser?keyword=${encodeURIComponent(item.title)}` };
-  };
-
-  const specificSource = getSpecificSource();
-  const sources = [
-    { name: 'Google Search', icon: <Search size={18} />, url: `https://www.google.com/search?q=${encodeURIComponent(item.title)}` },
-    { name: 'YouTube', icon: <Youtube size={18} />, url: `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}+${isReadingMaterial ? 'review' : 'trailer'}` },
-    { name: specificSource.name, icon: <Globe size={18} />, url: specificSource.url },
-  ];
+  const isReading = item.type === 'book' || item.type === 'manga';
 
   return (
-    <div className="fixed inset-0 z-150 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
-      <div className="bg-[#050505] w-full max-w-2xl border border-neutral-900 rounded-[40px] overflow-hidden flex flex-col md:flex-row shadow-2xl max-h-[90vh]">
-        <div className="w-full md:w-72 h-80 md:h-auto bg-neutral-900 shrink-0">
-          <img src={item.poster || '/placeholder.png'} className="w-full h-full object-cover" alt="" />
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-6 animate-in fade-in duration-200">
+      <div 
+        className="bg-[#0A0A0A] w-full max-w-3xl h-full max-h-[600px] rounded-[32px] border border-neutral-800 overflow-hidden flex flex-col md:flex-row shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        
+        {/* Left: Poster */}
+        <div className="hidden md:block w-[260px] shrink-0 relative bg-neutral-900 border-r border-neutral-900">
+          <img 
+            src={item.poster || "/api/placeholder/400/600"} 
+            alt={item.title}
+            className="w-full h-full object-cover"
+          />
         </div>
 
-        <div className="flex-1 flex flex-col p-8 overflow-y-auto text-left">
-          {!showSources ? (
-            <>
-              <div className="flex justify-between items-start mb-4">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-black text-white leading-tight">{item.title}</h2>
-                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em]">{item.creator || 'Unknown'}</p>
+        {/* Right: Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#0A0A0A]">
+          {/* Header */}
+          <div className="p-6 pb-2 flex justify-between items-start shrink-0">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-500">
+                  {item.type}
+                </span>
+                {item.rating && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-md">
+                    <Star size={10} fill="currentColor" />
+                    {item.rating}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-white leading-tight truncate">
+                {item.title}
+              </h2>
+            </div>
+            <button 
+              onClick={onClose} 
+              className="text-neutral-600 hover:text-white transition-colors shrink-0 p-1"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Scrollable Mid-section with FADE EFFECT */}
+          <div className="relative flex-1 min-h-0">
+            <div 
+              className="h-full overflow-y-auto p-6 pt-2 space-y-6 scrollbar-hide"
+              style={{
+                /* This creates the fade out effect at the bottom */
+                maskImage: 'linear-gradient(to bottom, black 85%, transparent 100%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, black 85%, transparent 100%)'
+              }}
+            >
+              <div className="flex gap-4 text-neutral-500">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest">
+                  <Calendar size={12} />
+                  {item.year || 'N/A'}
                 </div>
-                <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors"><X size={24} /></button>
               </div>
 
-              <div className="flex flex-wrap gap-2 mb-6">
-                <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800">
-                  <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                  <span className="text-sm font-black text-white">{item.rating?.toFixed(1)}</span>
+              {item.genres && item.genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {item.genres.map((genre) => (
+                    <span key={genre} className="px-2.5 py-1 bg-neutral-900 border border-neutral-800 rounded-lg text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                      {genre}
+                    </span>
+                  ))}
                 </div>
-              </div>
+              )}
 
-              <div className="mb-8 flex-1">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-700 mb-3 flex items-center gap-2"><Tag size={10} /> Synopsis</h3>
-                <p className="text-sm text-neutral-400 leading-relaxed line-clamp-6">{item.synopsis || "No description available."}</p>
-              </div>
-
-              <div className="mt-auto pt-6 border-t border-neutral-900 flex gap-3">
-                <button onClick={onEdit} className="flex-1 h-14 rounded-2xl bg-neutral-900 text-white text-[10px] font-black uppercase tracking-[0.2em] border border-neutral-800 flex items-center justify-center">
-                  Update
-                </button>
-                <button 
-                  onClick={() => setShowSources(true)}
-                  className="flex-1 h-14 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2.5 transition-all active:scale-95"
-                >
-                  <div className="shrink-0">{isReadingMaterial ? <BookOpen size={16}/> : <Play size={16} fill="currentColor"/>}</div>
-                  <span className="leading-none mt-px">Continue {isReadingMaterial ? 'Reading' : 'Watching'}</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col h-full">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-lg font-black text-white uppercase tracking-tighter">Select Source</h2>
-                <button onClick={() => setShowSources(false)} className="text-neutral-500 hover:text-white text-[10px] font-black uppercase tracking-widest">Back</button>
-              </div>
-              <div className="space-y-3">
-                {sources.map((source) => (
-                  <a key={source.name} href={source.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-neutral-900/50 border border-neutral-800 rounded-3xl hover:bg-neutral-800 transition-all group">
-                    <div className="flex items-center gap-4">
-                      <div className="text-neutral-500 group-hover:text-white">{source.icon}</div>
-                      <span className="text-[11px] font-black text-white uppercase tracking-widest">{source.name}</span>
-                    </div>
-                    <ExternalLink size={14} className="text-neutral-700 group-hover:text-white" />
-                  </a>
-                ))}
+              <div className="pb-10"> {/* Extra padding so text doesn't end exactly at the fade */}
+                <h3 className="text-[9px] font-black uppercase tracking-widest text-neutral-600 mb-2">About</h3>
+                <p className="text-neutral-400 text-xs leading-relaxed">
+                  {item.synopsis || "No description available."}
+                </p>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="p-6 border-t border-neutral-900 flex gap-3 shrink-0">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onEdit();
+              }}
+              className="flex-[2] bg-white text-black py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-200 transition-all flex items-center justify-center gap-2"
+            >
+              {isReading ? <BookOpen size={14} /> : <Play size={14} />}
+              Update
+            </button>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onClose();
+              }}
+              className="flex-1 bg-neutral-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border border-neutral-800 hover:bg-neutral-800 transition-all"
+            >
+              Continue
+            </button>
+          </div>
         </div>
       </div>
     </div>

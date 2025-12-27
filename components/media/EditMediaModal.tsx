@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useMediaStore } from '@/store/mediaStore';
-import { Minus, Plus, X, Bookmark } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import { MediaStatus } from '@/types';
 
 interface EditMediaModalProps {
@@ -38,7 +38,10 @@ export default function EditMediaModal({ itemId, onClose }: EditMediaModalProps)
     let correctedVal = Math.max(0, newVal);
     
     if (totalVal > 0 && correctedVal >= totalVal) {
-      updateMedia(item.id, { progress: totalVal, status: 'completed' as MediaStatus });
+      updateMedia(item.id, { 
+        progress: totalVal, 
+        status: 'completed' as MediaStatus 
+      });
       return;
     }
 
@@ -61,12 +64,12 @@ export default function EditMediaModal({ itemId, onClose }: EditMediaModalProps)
         </div>
 
         <h3 className="text-xl font-bold text-white mb-2 line-clamp-1">{item.title}</h3>
-        <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-10 text-neutral-500">
+        <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-10">
           {isReading ? 'Chapter' : 'Episode'} <span className="text-white">{currentProgress}</span> 
           {totalVal > 0 ? ` / ${totalVal}` : ''}
         </p>
 
-        {/* Counter Controls */}
+        {/* Counter UI */}
         <div className="flex items-center justify-center gap-6 mb-12">
           <button 
             type="button"
@@ -76,13 +79,16 @@ export default function EditMediaModal({ itemId, onClose }: EditMediaModalProps)
             <Minus size={24} />
           </button>
           
-          <input 
-            type="number"
-            value={currentProgress === 0 ? "" : currentProgress}
-            placeholder="0"
-            onChange={(e) => handleProgressUpdate(Number(e.target.value))}
-            className="w-32 bg-transparent text-6xl font-black text-white text-center focus:outline-none"
-          />
+          <div className="relative">
+            <input 
+              type="number"
+              value={currentProgress === 0 ? "" : currentProgress}
+              placeholder="0"
+              onChange={(e) => handleProgressUpdate(Number(e.target.value))}
+              /* The classes below specifically target and remove the tiny up/down arrows */
+              className="w-32 bg-transparent text-6xl font-black text-white text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
 
           <button 
             type="button"
@@ -93,7 +99,7 @@ export default function EditMediaModal({ itemId, onClose }: EditMediaModalProps)
           </button>
         </div>
 
-        {/* --- STATUS SELECTION (Now with Planned) --- */}
+        {/* Status Switcher */}
         <div className="grid grid-cols-3 gap-2 p-1.5 bg-black rounded-2xl border border-neutral-900">
           <button 
             onClick={() => updateMedia(item.id, { status: 'plan_to_watch' })}
@@ -107,14 +113,20 @@ export default function EditMediaModal({ itemId, onClose }: EditMediaModalProps)
           <button 
             onClick={() => updateMedia(item.id, { status: isReading ? 'reading' : 'watching' })}
             className={`py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              item.status === 'watching' || item.status === 'reading' ? 'bg-neutral-800 text-white shadow-lg' : 'text-neutral-600'
+              item.status === 'watching' || item.status === 'reading' ? 'bg-white text-black' : 'text-neutral-600'
             }`}
           >
             Ongoing
           </button>
 
           <button 
-            onClick={() => updateMedia(item.id, { status: 'completed', progress: totalVal || currentProgress })}
+            onClick={() => {
+              if (totalVal > 0) {
+                updateMedia(item.id, { status: 'completed', progress: totalVal });
+              } else {
+                updateMedia(item.id, { status: 'completed' });
+              }
+            }}
             className={`py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
               item.status === 'completed' ? 'bg-white text-black' : 'text-neutral-600'
             }`}

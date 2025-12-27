@@ -1,72 +1,117 @@
 "use client";
 
-import { Media } from '@/types';
-import { useMediaStore } from '@/store/mediaStore';
-import { Star, Plus, Minus } from 'lucide-react';
+import { Media } from "@/types";
+import { Play, BookOpen, Trash2, Edit3, Star } from "lucide-react";
 
-interface MediaCardProps { 
-  item: Media; 
-  onView: (item: Media) => void; 
-  onDelete: (item: Media) => void;
+interface MediaCardProps {
+  item: Media;
+  onView: (item: Media) => void;
+  onDelete: (id: string) => void; // Changed to accept ID for consistency
 }
 
 export default function MediaCard({ item, onView, onDelete }: MediaCardProps) {
-  const updateProgress = useMediaStore(state => state.updateProgress);
-
-  const adjustProgress = (amount: number) => {
-    const next = (item.progress || 0) + amount;
-    const max = item.episodes || Infinity;
-    if (next >= 0 && next <= max) {
-      updateProgress(item.id, next);
-    }
-  };
+  // --- Data Normalization ---
+  // Ensures we handle both 'total' and 'episodes' naming from different APIs
+  // @ts-ignore
+  const total = Number(item.total || item.episodes || 0);
+  const progress = Number(item.progress || 0);
+  const percentage = total > 0 ? (progress / total) * 100 : 0;
+  
+  // Safely handle optional rating
+  const rating = item.rating ?? 0;
+  
+  const isReading = item.type === 'book' || item.type === 'manga';
 
   return (
-    <div className="group relative bg-neutral-900/40 rounded-4xl border border-neutral-800/50 overflow-hidden flex flex-col transition-all hover:border-neutral-700 hover:bg-neutral-900/60 shadow-2xl">
-      <div className="relative aspect-2/3 overflow-hidden bg-black text-left">
+    <div className="group relative bg-[#0D0D0D] rounded-4xl overflow-hidden border border-neutral-900 transition-all duration-500 hover:border-neutral-700 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.8)]">
+      
+      {/* --- Poster Section --- */}
+      <div className="aspect-2/3 relative overflow-hidden">
         <img 
-          src={item.poster || '/placeholder.png'} 
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" 
+          src={item.poster || "/api/placeholder/400/600"} 
           alt={item.title}
+          className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-110"
         />
         
-        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 z-20 backdrop-blur-[2px]">
-          <button onClick={() => onView(item)} className="w-32 py-2.5 bg-white text-black rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:scale-105 transition-transform">
-            Details
-          </button>
-          <button onClick={() => onDelete(item)} className="text-[9px] text-neutral-600 font-bold uppercase tracking-[0.2em] hover:text-red-500 transition-colors mt-2">
-            Remove
-          </button>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4">
-        <h3 className="font-bold text-sm truncate text-neutral-100 text-left">{item.title}</h3>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 bg-neutral-800/40 px-2 py-0.5 rounded-lg border border-neutral-800">
-             <Star size={10} className="text-yellow-500 fill-yellow-500" />
-             <span className="text-[11px] font-black text-neutral-200">{item.rating?.toFixed(1)}</span>
+        {/* Glassmorphism Status Badge */}
+        <div className="absolute top-4 left-4 z-10">
+          <div className="px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center gap-2">
+            {isReading ? (
+              <BookOpen size={10} className="text-emerald-400" />
+            ) : (
+              <Play size={10} className="text-sky-400" />
+            )}
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/90">
+              {item.status === 'plan_to_watch' ? 'Queue' : item.status}
+            </span>
           </div>
-          <span className="text-[10px] font-black text-neutral-500 tracking-tighter">
-            {item.progress} <span className="text-neutral-700 mx-0.5">/</span> {item.episodes || '??'}
-          </span>
         </div>
 
-        {item.type !== 'movie' && (
-          <div className="flex items-center gap-3 pt-1">
-            <div className="flex-1 h-1 bg-neutral-900 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-white transition-all duration-500 ease-out" 
-                style={{ width: `${item.episodes ? Math.min(((item.progress || 0) / item.episodes) * 100, 100) : 0}%` }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => adjustProgress(-1)} className="text-neutral-600 hover:text-white transition-colors"><Minus size={14} /></button>
-              <button onClick={() => adjustProgress(1)} className="text-neutral-600 hover:text-white transition-colors"><Plus size={14} /></button>
-            </div>
+        {/* Action Overlay (Visible on Hover) */}
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3 z-20">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onView(item);
+            }}
+            className="p-3 bg-white text-black rounded-full hover:scale-110 active:scale-95 transition-transform shadow-xl"
+            title="Edit Progress"
+          >
+            <Edit3 size={18} />
+          </button>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(item.id);
+            }}
+            className="p-3 bg-red-500 text-white rounded-full hover:scale-110 active:scale-95 transition-transform shadow-xl"
+            title="Delete Entry"
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
+
+        {/* Bottom Progress Bar (Slim & Glowing) */}
+        {total > 0 && (
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-white/10 z-10">
+            <div 
+              className="h-full bg-white transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(255,255,255,0.8)]"
+              style={{ width: `${percentage}%` }}
+            />
           </div>
         )}
+      </div>
+
+      {/* --- Content Section --- */}
+      <div className="p-5">
+        <div className="flex justify-between items-start gap-2 mb-1">
+          <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-sky-400 transition-colors">
+            {item.title}
+          </h3>
+          
+          {/* Safe Rating Check */}
+          {rating > 0 && (
+            <div className="flex items-center gap-1 text-[10px] font-black text-yellow-500 shrink-0">
+              <Star size={10} fill="currentColor" />
+              {rating.toFixed(1)}
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex flex-col">
+            <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
+              {isReading ? 'Chapter' : 'Episode'}
+            </p>
+            <p className="text-xs font-bold text-neutral-200">
+              {progress} <span className="text-neutral-600 font-medium">/ {total > 0 ? total : '?'}</span>
+            </p>
+          </div>
+          
+          <div className="text-[9px] font-black px-2 py-1 rounded-lg bg-neutral-900 text-neutral-500 border border-neutral-800 uppercase tracking-tighter">
+            {item.year || 'N/A'}
+          </div>
+        </div>
       </div>
     </div>
   );

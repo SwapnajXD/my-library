@@ -67,7 +67,7 @@ export default function Page() {
                 key={item.id} 
                 item={item} 
                 onView={(it: Media) => setViewingItem(it)} 
-                onDelete={(it: Media) => deleteMedia(it.id)}
+                onDelete={(id: string) => deleteMedia(id)}
               />
             ))}
             
@@ -88,14 +88,11 @@ export default function Page() {
 
       {/* --- OVERLAYS --- */}
 
-      {/* Global Search/Add Modal */}
       <AddSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* Layer 1: Info Tab Modal (Base Layer) */}
       {viewingItem && (
         <MediaModal 
           item={viewingItem} 
-          // Layered navigation: Don't close details if editor is on top
           onClose={() => {
             if (!isEditing) setViewingItem(null);
           }} 
@@ -103,10 +100,9 @@ export default function Page() {
         />
       )}
 
-      {/* Layer 2: Progress Editor Modal (Top Layer) */}
       {isEditing && viewingItem && (
         <EditMediaModal 
-          itemId={viewingItem.id} // Pass ONLY the id
+          itemId={viewingItem.id} 
           onClose={() => setIsEditing(false)} 
         />
       )}
