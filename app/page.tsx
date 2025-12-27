@@ -5,7 +5,7 @@ import { useMediaStore } from "@/store/mediaStore";
 import { VaultCard, VaultDetailsModal, VaultEditModal } from "@/components/vault";
 import { StatsView } from "@/components/stats/StatsView";
 import AddSearch from "@/components/search/AddSearch"; 
-import { Plus, X as CloseIcon, Zap, Download, Upload, Settings, ShieldCheck, LayoutGrid, BarChart2 } from "lucide-react";
+import { Plus, X as CloseIcon, Zap, Download, Upload, Settings, ShieldCheck, BarChart3, ChevronLeft } from "lucide-react";
 import { Media } from "@/types";
 
 export default function Page() {
@@ -51,14 +51,12 @@ export default function Page() {
         if (typeof content === 'string') {
           const importedData = JSON.parse(content);
           if (Array.isArray(importedData)) {
-            if (confirm(`Import ${importedData.length} entries?`)) {
-              const currentIds = new Set(media.map(m => m.id));
-              const newEntries = importedData.filter(m => !currentIds.has(m.id));
-              setMedia([...media, ...newEntries]);
-            }
+            const currentIds = new Set(media.map(m => m.id));
+            const newEntries = importedData.filter(m => !currentIds.has(m.id));
+            setMedia([...media, ...newEntries]);
           }
         }
-      } catch (err) { alert("Invalid File."); }
+      } catch (err) { alert("Invalid JSON"); }
     };
     fileReader.readAsText(files[0]);
   };
@@ -67,8 +65,8 @@ export default function Page() {
     <main className="min-h-screen bg-[#000000] text-[#E5E5E5] p-4 md:p-12 selection:bg-sky-500/30">
       <div className="max-w-7xl mx-auto space-y-12">
         
-        {/* Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-[#1A1A1A] pb-8 gap-6">
+        {/* Header - Back to ultra minimal */}
+        <header className="flex justify-between items-center border-b border-[#1A1A1A] pb-8">
           <div className="flex items-center gap-6">
              <div className="flex items-center gap-4">
                 <div className="p-3 bg-[#050505] border border-[#1A1A1A] rounded-2xl text-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.1)]">
@@ -78,64 +76,77 @@ export default function Page() {
                       <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
                    </svg>
                 </div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white">VAULt</h1>
-             </div>
-
-             {/* Navigation Toggles */}
-             <div className="flex bg-[#050505] border border-[#1A1A1A] rounded-2xl p-1">
-                <button 
-                  onClick={() => setView('grid')}
-                  className={`p-2.5 rounded-xl transition-all flex items-center gap-2 ${view === 'grid' ? 'bg-[#E5E5E5] text-black' : 'text-[#444444] hover:text-white'}`}
-                >
-                  <LayoutGrid size={16} />
-                  <span className="text-[9px] font-black uppercase tracking-widest hidden sm:block">Archive</span>
-                </button>
-                <button 
-                  onClick={() => setView('stats')}
-                  className={`p-2.5 rounded-xl transition-all flex items-center gap-2 ${view === 'stats' ? 'bg-[#E5E5E5] text-black' : 'text-[#444444] hover:text-white'}`}
-                >
-                  <BarChart2 size={16} />
-                  <span className="text-[9px] font-black uppercase tracking-widest hidden sm:block">Analytics</span>
-                </button>
+                <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-none">VAULt</h1>
              </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <button onClick={() => setShowSettings(!showSettings)} className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-white text-black border-white' : 'bg-[#050505] border-[#1A1A1A] text-[#444444] hover:text-white'}`}>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => {
+                setShowSettings(!showSettings);
+                if (view === 'stats') setView('grid'); // Reset view when closing settings
+              }}
+              className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-white text-black border-white' : 'bg-[#050505] border-[#1A1A1A] text-[#444444] hover:text-white'}`}
+            >
               <Settings size={20} />
             </button>
-            <button onClick={() => setIsSearching(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black h-12 px-8 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-sky-500 hover:text-white transition-all shadow-2xl">
+            <button onClick={() => setIsSearching(true)} className="flex items-center gap-2 bg-white text-black h-12 px-8 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-sky-500 hover:text-white transition-all shadow-2xl active:scale-95">
               <Plus size={16} strokeWidth={4} /> Add Entry
             </button>
           </div>
         </header>
 
+        {/* Unified Settings & Stats Panel */}
         {showSettings && (
-          <section className="bg-[#050505] border border-[#1A1A1A] rounded-4xl p-8 animate-in fade-in slide-in-from-right-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <ShieldCheck size={14} className="text-sky-500" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">System Archive</p>
+          <section className="bg-[#050505] border border-[#1A1A1A] rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="p-8 border-b border-[#1A1A1A] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="flex items-center gap-4">
+                {view === 'stats' && (
+                  <button onClick={() => setView('grid')} className="p-2 bg-black border border-[#1A1A1A] rounded-xl text-white hover:border-sky-500">
+                    <ChevronLeft size={16} />
+                  </button>
+                )}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck size={14} className="text-sky-500" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">System Protocol</p>
+                  </div>
+                  <p className="text-xs text-[#444444] font-medium italic">
+                    {view === 'stats' ? "Real-time data visualization of your archive." : "Manage local database and view analytics."}
+                  </p>
                 </div>
-                <p className="text-xs text-[#444444] font-medium italic">Manage local database backups.</p>
               </div>
+              
               <div className="flex gap-4 w-full md:w-auto">
-                <button onClick={exportVault} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-sky-500 transition-all active:scale-95">
-                  <Download size={16} /> Export JSON
+                {view === 'grid' && (
+                  <button 
+                    onClick={() => setView('stats')}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-sky-500/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-sky-500 hover:bg-sky-500 hover:text-white transition-all"
+                  >
+                    <BarChart3 size={16} /> Analytics
+                  </button>
+                )}
+                <button onClick={exportVault} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
+                  <Download size={16} /> Export
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-sky-500 transition-all active:scale-95">
-                  <Upload size={16} /> Import JSON
+                <button onClick={() => fileInputRef.current?.click()} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:border-white transition-all">
+                  <Upload size={16} /> Import
                 </button>
                 <input type="file" ref={fileInputRef} onChange={importVault} accept=".json" className="hidden" />
               </div>
             </div>
+
+            {view === 'stats' && (
+              <div className="p-8 bg-black/50">
+                <StatsView />
+              </div>
+            )}
           </section>
         )}
 
-        {/* View Switcher Content */}
-        {view === 'grid' ? (
-          <>
+        {/* Main Interface */}
+        {view === 'grid' && (
+          <div className="space-y-12">
             {nextUp.length > 0 && (
               <section className="animate-in fade-in slide-in-from-top-4 duration-500">
                 <div className="flex items-center gap-3 mb-6 px-2">
@@ -144,12 +155,16 @@ export default function Page() {
                 </div>
                 <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
                   {nextUp.map((item) => (
-                    <button key={item.id} onClick={() => setEditingId(item.id)} className="flex items-center gap-4 bg-[#050505] border border-[#1A1A1A] p-3 rounded-2xl shrink-0 hover:border-sky-500/50 transition-all group active:scale-95">
-                      <img src={item.poster} alt="" className="w-10 h-10 rounded-lg object-cover grayscale group-hover:grayscale-0" />
+                    <button 
+                      key={item.id} 
+                      onClick={() => setEditingId(item.id)}
+                      className="flex items-center gap-4 bg-[#050505] border border-[#1A1A1A] p-3 rounded-2xl shrink-0 hover:border-sky-500/50 transition-all group active:scale-95"
+                    >
+                      <img src={item.poster} alt="" className="w-10 h-10 rounded-lg object-cover grayscale group-hover:grayscale-0 transition-all" />
                       <div className="text-left pr-4">
                         <p className="text-[9px] font-black text-white uppercase tracking-tight line-clamp-1">{item.title}</p>
                         <p className="text-[8px] font-bold text-[#444444] uppercase tracking-widest mt-1">
-                           Progress: <span className="text-sky-500">{item.progress}</span> / {item.total || '?'}
+                          <span className="text-sky-500">{item.progress}</span> / {item.total || '?'}
                         </p>
                       </div>
                     </button>
@@ -169,14 +184,19 @@ export default function Page() {
                 </div>
               )}
             </section>
-          </>
-        ) : (
-          <StatsView />
+          </div>
         )}
 
         {/* Modals */}
         {isSearching && <AddSearch isOpen={isSearching} onClose={() => setIsSearching(false)} />}
-        {selectedItem && <VaultDetailsModal item={selectedItem} onClose={() => setSelectedItem(null)} onEdit={() => setEditingId(selectedItem.id)} onGenreClick={(genre) => { setActiveGenre(genre); setSelectedItem(null); setView('grid'); }} />}
+        {selectedItem && (
+          <VaultDetailsModal 
+            item={selectedItem} 
+            onClose={() => setSelectedItem(null)} 
+            onEdit={() => setEditingId(selectedItem.id)}
+            onGenreClick={(genre) => { setActiveGenre(genre); setSelectedItem(null); }}
+          />
+        )}
         {editingId && <VaultEditModal itemId={editingId} onClose={() => setEditingId(null)} />}
       </div>
     </main>
