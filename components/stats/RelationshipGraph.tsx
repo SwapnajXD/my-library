@@ -26,7 +26,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   
-  const [zoom, setZoom] = useState(0.8); 
+  const [zoom, setZoom] = useState(0.6); // Slightly zoomed out to accommodate longer edges
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -37,13 +37,14 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
   const svgRef = useRef<SVGSVGElement>(null);
   const timeRef = useRef(0);
 
-  // --- ADJUSTED PHYSICS FOR STATIC FEEL ---
+  // --- EXTENDED EDGE PHYSICS CONSTANTS ---
   const FRICTION_MOVING = 0.88;   
-  const FRICTION_STATIC = 0.70;   // Much heavier friction when settled
-  const ATTRACTION = 0.007;       
-  const REPULSION_DIST = 190;     
-  const REPULSION_STRENGTH = 0.4; 
-  const GRID_SIZE = 450;
+  const FRICTION_STATIC = 0.72;   
+  const ATTRACTION = 0.004;       // Lowered to let nodes drift further out
+  const TARGET_EDGE_LENGTH = 320; // NEW: The ideal distance from Parent to Child
+  const REPULSION_DIST = 250;     // Increased to give children more personal space
+  const REPULSION_STRENGTH = 0.6; // Pushes harder to maintain the gap
+  const GRID_SIZE = 700;          // Spaced creators further apart to avoid overlap
   const JITTER_SPEED = 0.04;      
   const JITTER_STRENGTH = 0.12;   
 
@@ -61,17 +62,19 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
 
     Object.entries(creators).forEach(([name, items], idx) => {
       const cId = `creator-${name.replace(/\s+/g, '-').toLowerCase()}`;
-      const cx = 500 + (idx * 800); 
-      const cy = 500;
+      // Creators start much further apart
+      const cx = 800 + (idx * GRID_SIZE); 
+      const cy = 800;
 
       initNodes.push({ id: cId, label: name, type: 'creator', x: cx, y: cy, vx: 0, vy: 0 });
       items.forEach((item, iIdx) => {
         const angle = (iIdx / items.length) * Math.PI * 2;
+        // Start children at the new extended edge length
         initNodes.push({ 
           id: item.id, label: item.title, type: 'media', poster: item.poster, 
           creatorId: cId, 
-          x: cx + Math.cos(angle) * 160, 
-          y: cy + Math.sin(angle) * 160,
+          x: cx + Math.cos(angle) * TARGET_EDGE_LENGTH, 
+          y: cy + Math.sin(angle) * TARGET_EDGE_LENGTH,
           vx: 0, vy: 0
         });
         initLinks.push({ source: cId, target: item.id });
@@ -83,7 +86,6 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
 
   useEffect(() => { initializeGraph(); }, [initializeGraph]);
 
-  // Search Logic
   useEffect(() => {
     if (!searchQuery || nodes.length === 0) return;
     const match = nodes.find(n => n.label.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -97,12 +99,11 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
     }
   }, [searchQuery, zoom]);
 
-  // Scroll Zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(prev => Math.min(Math.max(prev * delta, 0.1), 3));
+      setZoom(prev => Math.min(Math.max(prev * delta, 0.05), 3));
     };
     const container = containerRef.current;
     if (container) container.addEventListener('wheel', handleWheel, { passive: false });
@@ -118,19 +119,17 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
         const node = next[i];
         if (node.id === dragTargetId.current) continue;
 
-        // Apply friction based on whether it's currently being dragged or global state
         let nvx = node.vx * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
         let nvy = node.vy * (dragTargetId.current ? FRICTION_MOVING : FRICTION_STATIC);
 
-        // Organic Shake
         nvx += Math.cos(timeRef.current + i) * JITTER_STRENGTH;
         nvy += Math.sin(timeRef.current * 0.8 + i) * JITTER_STRENGTH;
 
         if (node.type === 'creator') {
           const targetX = Math.round(node.x / GRID_SIZE) * GRID_SIZE;
           const targetY = Math.round(node.y / GRID_SIZE) * GRID_SIZE;
-          nvx += (targetX - node.x) * 0.1; // Stronger snap back
-          nvy += (targetY - node.y) * 0.1;
+          nvx += (targetX - node.x) * 0.05; 
+          nvy += (targetY - node.y) * 0.05;
         }
 
         if (node.type === 'media' && node.creatorId) {
@@ -138,8 +137,12 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
           if (creator) {
             const dx = creator.x - node.x;
             const dy = creator.y - node.y;
-            nvx += dx * ATTRACTION;
-            nvy += dy * ATTRACTION;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only pull if further than target length, or push if too close
+            const diff = dist - TARGET_EDGE_LENGTH;
+            nvx += (dx / dist) * diff * ATTRACTION;
+            nvy += (dy / dist) * diff * ATTRACTION;
           }
         }
 
@@ -184,12 +187,10 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 
-  // Helper to check if a node should be highlighted based on selection
   const getIsHighlighted = (node: Node) => {
     if (!selectedNodeId) return true;
     if (node.id === selectedNodeId) return true;
     if (node.type === 'media' && node.creatorId === selectedNodeId) return true;
-    // If a media node is selected, highlight its creator parent
     const selectedNode = nodes.find(n => n.id === selectedNodeId);
     if (selectedNode?.type === 'media' && node.id === selectedNode.creatorId) return true;
     return false;
@@ -205,8 +206,8 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
         </div>
         <div className="flex bg-black/50 backdrop-blur-md border border-white/10 rounded-2xl p-1 gap-1">
           <button onClick={() => setZoom(z => Math.min(z * 1.2, 3))} className="p-2 text-white/40 hover:text-white"><ZoomIn size={14}/></button>
-          <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.1))} className="p-2 text-white/40 hover:text-white"><ZoomOut size={14}/></button>
-          <button onClick={() => {setZoom(0.8); setViewOffset({x:0,y:0}); setSelectedNodeId(null)}} className="p-2 text-white/40 hover:text-sky-400"><Maximize2 size={14}/></button>
+          <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.05))} className="p-2 text-white/40 hover:text-white"><ZoomOut size={14}/></button>
+          <button onClick={() => {setZoom(0.6); setViewOffset({x:0,y:0}); setSelectedNodeId(null)}} className="p-2 text-white/40 hover:text-sky-400"><Maximize2 size={14}/></button>
         </div>
       </div>
 
@@ -215,10 +216,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
           ref={svgRef}
           width="100%" height="100%" 
           onMouseMove={handleMouseMove}
-          onMouseDown={(e) => { 
-            lastMousePos.current = { x: e.clientX, y: e.clientY }; 
-            setIsPanning(true); 
-          }}
+          onMouseDown={(e) => { lastMousePos.current = { x: e.clientX, y: e.clientY }; setIsPanning(true); }}
           onMouseUp={() => { dragTargetId.current = null; setIsPanning(false); }}
           onMouseLeave={() => { dragTargetId.current = null; setIsPanning(false); }}
           onClick={(e) => { if (e.target === svgRef.current) setSelectedNodeId(null); }}
@@ -226,7 +224,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
           <defs>
             {nodes.map(node => node.poster && (
               <pattern key={`pattern-${node.id}`} id={`img-${node.id}`} patternUnits="objectBoundingBox" width="1" height="1">
-                <image href={node.poster} width="68" height="68" preserveAspectRatio="xMidYMid slice" />
+                <image href={node.poster} width="72" height="72" preserveAspectRatio="xMidYMid slice" />
               </pattern>
             ))}
           </defs>
@@ -247,7 +245,7 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
                   key={idx} 
                   x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
                   stroke={isActive ? "#0EA5E9" : "#FFFFFF"} 
-                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.15} 
+                  strokeOpacity={isActive ? 0.9 : selectedNodeId ? 0.05 : 0.1} 
                   strokeWidth={isActive ? 3 : 1} 
                 />
               );
@@ -260,27 +258,20 @@ export function RelationshipGraph({ searchQuery, selectedNodeId, setSelectedNode
               return (
                 <g 
                   key={node.id} 
-                  onMouseDown={(e) => { 
-                    e.stopPropagation(); 
-                    dragTargetId.current = node.id; 
-                    setSelectedNodeId(node.id); 
-                  }} 
-                  style={{ 
-                    opacity: isHighlighted ? 1 : 0.15,
-                    transition: 'opacity 0.4s ease, transform 0.2s ease'
-                  }}
+                  onMouseDown={(e) => { e.stopPropagation(); dragTargetId.current = node.id; setSelectedNodeId(node.id); }} 
+                  style={{ opacity: isHighlighted ? 1 : 0.1, transition: 'opacity 0.4s' }}
                 >
                   {node.type === 'creator' ? (
                     <>
-                      <circle r="52" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff25"} strokeWidth="2.5" />
-                      <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[10px] font-black uppercase tracking-tighter pointer-events-none italic">
-                        {node.label.length > 12 ? node.label.substring(0, 10) + '..' : node.label}
+                      <circle r="56" cx={node.x} cy={node.y} fill="#000" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff20"} strokeWidth="2.5" />
+                      <text x={node.x} y={node.y + 4} textAnchor="middle" fill="white" className="text-[11px] font-black uppercase tracking-tighter pointer-events-none italic">
+                        {node.label}
                       </text>
                     </>
                   ) : (
                     <>
-                      <circle r="36" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff15"} strokeWidth="2" />
-                      <circle r="34" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
+                      <circle r="38" cx={node.x} cy={node.y} fill="black" stroke={selectedNodeId === node.id || isMatch ? "#0EA5E9" : "#ffffff10"} strokeWidth="2" />
+                      <circle r="36" cx={node.x} cy={node.y} fill={`url(#img-${node.id})`} />
                     </>
                   )}
                 </g>
